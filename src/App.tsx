@@ -15,6 +15,10 @@ import EmployeesPage     from '@/pages/employees/EmployeesPage'
 import PayslipsPage      from '@/pages/payslips/PayslipsPage'
 import T4ListPage        from '@/pages/t4/T4ListPage'
 import T4EditPage        from '@/pages/t4/T4EditPage'
+import PayrollSummaryPage from '@/pages/payroll/PayrollSummaryPage'
+import RemittancePage    from '@/pages/remittance/RemittancePage'
+import ROEListPage       from '@/pages/roe/ROEListPage'
+import ROEEditPage       from '@/pages/roe/ROEEditPage'
 import SettingsPage      from '@/pages/settings/SettingsPage'
 import BillingPage       from '@/pages/billing/BillingPage'
 import NotFoundPage      from '@/pages/NotFoundPage'
@@ -92,9 +96,14 @@ export default function App() {
           <Route path="/companies"  element={<CompaniesPage />} />
           <Route path="/employees"  element={<EmployeesPage />} />
           <Route path="/payslips"   element={<PayslipsPage />} />
+          <Route path="/payroll"    element={<PayrollSummaryPage />} />
+          <Route path="/remittance" element={<RemittancePage />} />
           <Route path="/t4"         element={<T4ListPage />} />
           <Route path="/t4/new"     element={<T4EditPage />} />
           <Route path="/t4/:id/edit" element={<T4EditPage />} />
+          <Route path="/roe"         element={<ROEListPage />} />
+          <Route path="/roe/new"     element={<ROEEditPage />} />
+          <Route path="/roe/:id/edit" element={<ROEEditPage />} />
           <Route path="/settings"   element={<SettingsPage />} />
           <Route path="/billing"    element={<BillingPage />} />
 

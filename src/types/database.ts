@@ -154,3 +154,63 @@ export type Company   = Database['public']['Tables']['companies']['Row']
 export type Employee  = Database['public']['Tables']['employees']['Row']
 export type Payslip   = Database['public']['Tables']['payslips']['Row']
 export type T4Slip    = Database['public']['Tables']['t4_slips']['Row']
+
+// ROE — not in Database interface (added via migration 004)
+export interface ROE {
+  id:                    string
+  user_id:               string
+  company_id:            string
+  employee_id:           string
+  serial_number:         string | null
+  sin:                   string | null
+  employment_type:       'E' | 'C'
+  payroll_ref:           string | null
+  pay_period_type:       'W' | 'B' | 'S' | 'M' | 'A' | 'O'
+  first_day_worked:      string
+  last_day_paid:         string
+  final_pay_period_end:  string
+  reason_code:           string
+  reason_comments:       string | null
+  total_insurable_hours: number
+  total_insurable_earnings: number
+  vacation_pay_amount:   number
+  vacation_pay_type:     'I' | 'P'
+  stat_holiday_pay:      number
+  other_monies_amount:   number
+  other_monies_type:     string | null
+  insurable_earnings_by_period: number[]
+  contact_name:          string | null
+  contact_phone:         string | null
+  contact_ext:           string | null
+  comments:              string | null
+  status:                'draft' | 'issued' | 'amended'
+  issued_at:             string | null
+  created_at:            string
+  updated_at:            string
+}
+
+export const ROE_REASON_CODES: Record<string, string> = {
+  A: 'A — Shortage of work / end of contract',
+  B: 'B — Strike or lockout',
+  C: 'C — Return to school',
+  D: 'D — Illness or injury',
+  E: 'E — Quit',
+  F: 'F — Maternity leave',
+  G: 'G — Retirement',
+  H: 'H — Work-sharing',
+  J: 'J — Apprentice training',
+  K: 'K — Other',
+  M: 'M — Dismissal',
+  N: 'N — Leave of absence',
+  P: 'P — Parental leave',
+  Z: 'Z — Compassionate care / family caregiver',
+}
+
+export const PAY_PERIOD_TYPE_LABELS: Record<string, string> = {
+  W: 'Weekly',
+  B: 'Bi-weekly',
+  S: 'Semi-monthly',
+  M: 'Monthly',
+  A: '13 periods/year',
+  O: 'Other',
+}

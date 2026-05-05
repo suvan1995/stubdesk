@@ -44,6 +44,7 @@ export interface Database {
           province: 'ON' | 'AB' | 'BC'
           postal: string
           logo_url: string | null
+          first_period_start: string | null
           created_at: string
           updated_at: string
         }

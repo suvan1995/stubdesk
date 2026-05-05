@@ -13,6 +13,7 @@ import type { Company } from '@/types/database'
 type FormData = {
   name: string; cra_bn: string; street: string
   city: string; province: 'ON' | 'AB' | 'BC'; postal: string
+  first_period_start: string
 }
 
 const PROVINCE_OPTIONS = [
@@ -37,13 +38,13 @@ export default function CompaniesPage() {
 
   function openNew() {
     setEditing(null); setLogoData(null)
-    reset({ name:'', cra_bn:'', street:'', city:'', province:'ON', postal:'' })
+    reset({ name:'', cra_bn:'', street:'', city:'', province:'ON', postal:'', first_period_start:'' })
     setModalOpen(true)
   }
 
   function openEdit(c: Company) {
     setEditing(c); setLogoData(c.logo_url)
-    reset({ name: c.name, cra_bn: c.cra_bn ?? '', street: c.street, city: c.city, province: c.province, postal: c.postal })
+    reset({ name: c.name, cra_bn: c.cra_bn ?? '', street: c.street, city: c.city, province: c.province, postal: c.postal, first_period_start: c.first_period_start ?? '' })
     setModalOpen(true)
   }
 
@@ -154,6 +155,11 @@ export default function CompaniesPage() {
               {...register('province', { required: 'Required' })} />
             <Input label="Postal Code" required error={errors.postal?.message}
               {...register('postal', { required: 'Required' })} />
+            <div className="col-span-2">
+              <Input label="First Pay Period Start Date" type="date"
+                hint="The start date of the very first pay period for this company. Used to align all future period calculations correctly."
+                {...register('first_period_start')} />
+            </div>
           </div>
 
           {/* Logo */}

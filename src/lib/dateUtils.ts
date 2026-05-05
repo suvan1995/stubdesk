@@ -131,3 +131,108 @@ export function calcPeriodDates(
   end.setDate(end.getDate() + daysPerPeriod - 1)
   return { start: fmt(start), end: fmt(end) }
 }
+
+// ── Period detection ──────────────────────────────────────────────────────────
+// Given a pay frequency and an anchor date (employment start or Jan 1),
+// figure out which period number today falls in and what the current
+// period's start/end dates are.
+
+export interface PeriodInfo {
+  periodNumber:  number
+  periodStart:   string
+  periodEnd:     string
+  payDate:       string
+  periodsInYear: number
+  anchorDate:    string
+  anchorWarning?: boolean
+}
+
+/**
+ * Detect the current pay period by backtracking from today.
+ *
+ * @param payFrequency      - periods per year: 52 | 26 | 24 | 12
+ * @param employmentStart   - employee start date (YYYY-MM-DD) or null
+ * @param province          - for pay date business-day adjustment
+ * @param payDateOffset     - business days after period end for pay date
+ * @param companyFirstPeriod - company's very first pay period start (YYYY-MM-DD)
+ *                            This is the correct anchor. If not set, falls back
+ *                            to Jan 1 of the current year with a warning flag.
+ */
+export function detectCurrentPeriod(
+  payFrequency:       number,
+  _employmentStart:   string | null,
+  province:           string,
+  payDateOffset = 3,
+  companyFirstPeriod: string | null = null
+): PeriodInfo & { anchorWarning: boolean } {
+  const today          = new Date()
+  const year           = today.getFullYear()
+  const daysPerPeriod  = Math.round(365 / payFrequency)
+
+  // ── Choose anchor ──────────────────────────────────────────────────────────
+  // Priority: companyFirstPeriod > Jan 1 of current year
+  // We do NOT use employment start as anchor — the company's pay cycle
+  // is independent of when any individual employee started.
+  let anchor: Date
+  let anchorWarning = false
+
+  if (companyFirstPeriod) {
+    // Walk forward from the company's first period start until we find
+    // the first period that starts in the current year (or the last one
+    // before today if the anchor is already this year).
+    const base = new Date(companyFirstPeriod + 'T00:00:00')
+    // Find the period that contains Jan 1 of the current year
+    const jan1 = new Date(year, 0, 1)
+    const msPerDay = 86400000
+    const daysSinceBase = Math.floor((jan1.getTime() - base.getTime()) / msPerDay)
+    if (daysSinceBase >= 0) {
+      // Anchor is in the past — advance to the period that starts on/after Jan 1
+      const periodsElapsed = Math.floor(daysSinceBase / daysPerPeriod)
+      anchor = new Date(base)
+      anchor.setDate(anchor.getDate() + periodsElapsed * daysPerPeriod)
+      // If this period started before Jan 1, move one period forward
+      if (anchor < jan1) anchor.setDate(anchor.getDate() + daysPerPeriod)
+    } else {
+      // Company first period is in the future — use Jan 1 as fallback
+      anchor = jan1
+      anchorWarning = true
+    }
+  } else {
+    // No company first period set — use Jan 1 and warn
+    anchor = new Date(year, 0, 1)
+    anchorWarning = true
+  }
+
+  // ── Count periods from anchor to today ────────────────────────────────────
+  const msPerDay        = 86400000
+  const daysSinceAnchor = Math.max(0, Math.floor((today.getTime() - anchor.getTime()) / msPerDay))
+  const periodIndex     = Math.floor(daysSinceAnchor / daysPerPeriod)
+
+  const periodStart = new Date(anchor)
+  periodStart.setDate(periodStart.getDate() + periodIndex * daysPerPeriod)
+
+  const periodEnd = new Date(periodStart)
+  periodEnd.setDate(periodEnd.getDate() + daysPerPeriod - 1)
+
+  // ── Period number: count from Jan 1 of current year ───────────────────────
+  // Even if anchor is mid-year, period number is relative to the year start
+  const jan1Ms      = new Date(year, 0, 1).getTime()
+  const anchorMs    = anchor.getTime()
+  // How many periods before anchor since Jan 1?
+  const preAnchorPeriods = anchorMs > jan1Ms
+    ? 0  // anchor is after Jan 1 — period 1 starts at anchor
+    : 0
+  const periodNumber = preAnchorPeriods + periodIndex + 1
+
+  const payDateStr = calcPayDate(fmt(periodEnd), province, payDateOffset)
+
+  return {
+    periodNumber,
+    periodStart:   fmt(periodStart),
+    periodEnd:     fmt(periodEnd),
+    payDate:       payDateStr,
+    periodsInYear: payFrequency,
+    anchorDate:    fmt(anchor),
+    anchorWarning,
+  }
+}

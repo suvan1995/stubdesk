@@ -4,7 +4,7 @@ import { useCompanyStore } from '@/store/companyStore'
 import { useAuthStore } from '@/store/authStore'
 import { calculatePayslip, fmtCAD } from '@/lib/payrollEngine'
 import { generatePayslipPDF, buildStoragePath } from '@/lib/pdfGenerator'
-import { calcPayDate, calcPeriodDates, fmtDisplay } from '@/lib/dateUtils'
+import { calcPayDate, calcPeriodDates, fmtDisplay, detectCurrentPeriod } from '@/lib/dateUtils'
 import { supabase } from '@/lib/supabase'
 import type { PayslipInputs, PayslipResult } from '@/types/payroll'
 import type { Company, Employee } from '@/types/database'
@@ -33,6 +33,7 @@ export default function PayslipBuilder() {
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
   const [result, setResult] = useState<PayslipResult | null>(null)
+  const [anchorWarning, setAnchorWarning] = useState(false)
 
   // Step 1 — Company & Employee
   const [selectedCompany,  setSelectedCompany]  = useState<Company | null>(null)
@@ -78,6 +79,60 @@ export default function PayslipBuilder() {
     fetchCompanies()
     fetchEmployees()
   }, [fetchCompanies, fetchEmployees])
+
+  // When company+employee selected: detect current period by backtracking,
+  // then auto-fill YTD from saved payslip history for prior periods this year.
+  useEffect(() => {
+    if (!selectedEmployee || !selectedCompany) return
+
+    // 1. Detect which period we're in right now
+    const info = detectCurrentPeriod(
+      selectedEmployee.pay_frequency,
+      selectedEmployee.start_date,
+      selectedCompany.province,
+      payDateOffset,
+      selectedCompany.first_period_start ?? null
+    )
+
+    // Auto-fill dates if not already set
+    if (!periodStart) setPeriodStart(info.periodStart)
+    if (!periodEnd)   setPeriodEnd(info.periodEnd)
+    if (!payDate)     setPayDate(info.payDate)
+    setPeriodNumber(info.periodNumber)
+    setAnchorWarning(info.anchorWarning ?? false)
+
+    // 2. Fetch all saved payslips for this employee this year
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(supabase.from('payslips') as any)
+      .select('gross_pay,vac_pay,cpp1,cpp2,ei,fed_tax,prov_tax,net_pay,custom_deductions,pay_date,period_start')
+      .eq('employee_id', selectedEmployee.id)
+      .eq('company_id', selectedCompany.id)
+      .then(({ data }: { data: any[] | null }) => {
+        if (!data || data.length === 0) return
+        const year = new Date().getFullYear()
+        // Only include payslips from prior periods this year (not the current period)
+        const priorSlips = data.filter(p => {
+          const slipYear = new Date(p.pay_date).getFullYear()
+          return slipYear === year && p.period_start < info.periodStart
+        })
+        if (priorSlips.length === 0) return
+
+        setYtdGross(priorSlips.reduce((s: number, p: any) => s + (p.gross_pay || 0), 0))
+        setYtdVac(priorSlips.reduce((s: number, p: any) => s + (p.vac_pay || 0), 0))
+        setYtdCpp1(priorSlips.reduce((s: number, p: any) => s + (p.cpp1 || 0), 0))
+        setYtdCpp2(priorSlips.reduce((s: number, p: any) => s + (p.cpp2 || 0), 0))
+        setYtdEi(priorSlips.reduce((s: number, p: any) => s + (p.ei || 0), 0))
+        setYtdFed(priorSlips.reduce((s: number, p: any) => s + (p.fed_tax || 0), 0))
+        setYtdProv(priorSlips.reduce((s: number, p: any) => s + (p.prov_tax || 0), 0))
+        setYtdNet(priorSlips.reduce((s: number, p: any) => s + (p.net_pay || 0), 0))
+        const customTotal = priorSlips.reduce((s: number, p: any) => {
+          const deducts = (p.custom_deductions as { amount: number }[]) ?? []
+          return s + deducts.reduce((ds: number, d: any) => ds + (d.amount || 0), 0)
+        }, 0)
+        setYtdCustom(customTotal)
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEmployee?.id, selectedCompany?.id])
 
   // Auto-calculate dates when in auto mode
   useEffect(() => {
@@ -287,22 +342,34 @@ export default function PayslipBuilder() {
             />
 
             {selectedEmployee && (
-              <div className="bg-brand-50 rounded-lg p-4 text-sm space-y-1">
-                <div className="font-semibold text-brand-800">{selectedEmployee.name}</div>
-                <div className="text-brand-600">
-                  {selectedEmployee.emp_type === 'salaried'
-                    ? `Salaried · $${selectedEmployee.rate.toLocaleString()}/yr`
-                    : `Hourly · $${selectedEmployee.rate}/hr`}
-                  {' · '}{FREQ_OPTIONS.find(f => f.value === selectedEmployee.pay_frequency)?.label}
+              <div className="space-y-2">
+                <div className="bg-brand-50 rounded-lg p-4 text-sm space-y-1">
+                  <div className="font-semibold text-brand-800">{selectedEmployee.name}</div>
+                  <div className="text-brand-600">
+                    {selectedEmployee.emp_type === 'salaried'
+                      ? `Salaried · $${selectedEmployee.rate.toLocaleString()}/yr`
+                      : `Hourly · $${selectedEmployee.rate}/hr`}
+                    {' · '}{FREQ_OPTIONS.find(f => f.value === selectedEmployee.pay_frequency)?.label}
+                  </div>
+                  {(selectedEmployee.job_title || selectedEmployee.department) && (
+                    <div className="text-gray-500">
+                      {[selectedEmployee.job_title, selectedEmployee.department].filter(Boolean).join(' · ')}
+                    </div>
+                  )}
+                  {periodStart && periodEnd && (
+                    <div className="text-xs text-brand-600 mt-1 pt-1 border-t border-brand-100">
+                      Detected: Period {periodNumber} &nbsp;·&nbsp; {fmtDisplay(periodStart)} to {fmtDisplay(periodEnd)} &nbsp;·&nbsp; Pay: {fmtDisplay(payDate)}
+                    </div>
+                  )}
                 </div>
-                {(selectedEmployee.job_title || selectedEmployee.department) && (
-                  <div className="text-gray-500">
-                    {[selectedEmployee.job_title, selectedEmployee.department].filter(Boolean).join(' · ')}
+                {anchorWarning && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 text-xs text-yellow-800">
+                    ⚠ Period detection is using Jan 1 as the anchor because this company has no First Pay Period Start Date set.
+                    Set it in the Companies page to get accurate period alignment.
                   </div>
                 )}
               </div>
             )}
-
             <div className="flex justify-end pt-2">
               <button
                 className="btn-primary"
@@ -512,10 +579,20 @@ export default function PayslipBuilder() {
 
           {/* YTD Prior Balances */}
           <Card>
-            <CardTitle>Year-to-Date Balances <span className="text-gray-400 font-normal normal-case">— prior periods only, optional</span></CardTitle>
+            <div className="flex items-center justify-between mb-2">
+              <CardTitle className="mb-0">Year-to-Date Balances <span className="text-gray-400 font-normal normal-case">— prior periods only</span></CardTitle>
+              <button className="text-xs text-brand-600 hover:underline font-medium" onClick={() => {
+                setYtdGross(0); setYtdVac(0); setYtdCpp1(0); setYtdCpp2(0)
+                setYtdEi(0); setYtdFed(0); setYtdProv(0); setYtdCustom(0); setYtdNet(0)
+              }}>
+                ↺ Reset
+              </button>
+            </div>
             <p className="text-xs text-gray-400 mb-4">
-              Enter totals from all pay periods <strong>before</strong> this one.
-              Leave at 0 and the app will auto-estimate YTD by multiplying this period × period number.
+              Auto-filled from saved payslips for prior periods this year. The period number is detected
+              by backtracking from today using the employee's pay frequency
+              {selectedEmployee?.start_date ? ` and employment start date (${fmtDisplay(selectedEmployee.start_date)})` : ''}.
+              Edit any field manually if needed.
             </p>
             <div className="grid grid-cols-3 gap-3">
               {[

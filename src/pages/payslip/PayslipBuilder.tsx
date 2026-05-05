@@ -4,6 +4,7 @@ import { useCompanyStore } from '@/store/companyStore'
 import { useAuthStore } from '@/store/authStore'
 import { calculatePayslip, fmtCAD } from '@/lib/payrollEngine'
 import { generatePayslipPDF, buildStoragePath } from '@/lib/pdfGenerator'
+import { calcPayDate, calcPeriodDates, fmtDisplay } from '@/lib/dateUtils'
 import { supabase } from '@/lib/supabase'
 import type { PayslipInputs, PayslipResult } from '@/types/payroll'
 import type { Company, Employee } from '@/types/database'
@@ -50,23 +51,52 @@ export default function PayslipBuilder() {
   const [overtimeMult, setOvertimeMult] = useState(1.5)
   const [actualHours,  setActualHours]  = useState(0)
 
+  // Step 2b — Pay date auto-calc
+  const [autoDate,      setAutoDate]      = useState(false)
+  const [firstPeriodStart, setFirstPeriodStart] = useState('')
+  const [periodNumber,  setPeriodNumber]  = useState(1)
+  const [payDateOffset, setPayDateOffset] = useState(3)
+
   // Step 3 — Extras
   const [extras,    setExtras]    = useState<{ label: string; amount: number }[]>([])
   const [deductions,setDeductions]= useState<{ label: string; amount: number }[]>([])
   const [notes,     setNotes]     = useState('')
   const [template,  setTemplate]  = useState(1)
 
+  // Step 3b — YTD prior balances
+  const [ytdGross,  setYtdGross]  = useState(0)
+  const [ytdVac,    setYtdVac]    = useState(0)
+  const [ytdCpp1,   setYtdCpp1]   = useState(0)
+  const [ytdCpp2,   setYtdCpp2]   = useState(0)
+  const [ytdEi,     setYtdEi]     = useState(0)
+  const [ytdFed,    setYtdFed]    = useState(0)
+  const [ytdProv,   setYtdProv]   = useState(0)
+  const [ytdCustom, setYtdCustom] = useState(0)
+  const [ytdNet,    setYtdNet]    = useState(0)
+
   useEffect(() => {
     fetchCompanies()
     fetchEmployees()
   }, [fetchCompanies, fetchEmployees])
 
-  // Auto-fill when employee selected
+  // Auto-calculate dates when in auto mode
   useEffect(() => {
-    if (selectedEmployee) {
-      setVacRate(4)
+    if (!autoDate || !firstPeriodStart || !selectedCompany) return
+    const { start, end } = calcPeriodDates(firstPeriodStart, periodNumber, selectedEmployee?.pay_frequency ?? 26)
+    setPeriodStart(start)
+    setPeriodEnd(end)
+    const pd = calcPayDate(end, selectedCompany.province, payDateOffset)
+    setPayDate(pd)
+  }, [autoDate, firstPeriodStart, periodNumber, payDateOffset, selectedCompany, selectedEmployee])
+
+  // Recalc pay date when period end or offset changes in manual mode
+  useEffect(() => {
+    if (autoDate || !periodEnd || !selectedCompany) return
+    if (payDateOffset > 0) {
+      const pd = calcPayDate(periodEnd, selectedCompany.province, payDateOffset)
+      setPayDate(pd)
     }
-  }, [selectedEmployee])
+  }, [periodEnd, payDateOffset, selectedCompany, autoDate])
 
   function buildInputs(): PayslipInputs {
     const emp = selectedEmployee!
@@ -85,7 +115,17 @@ export default function PayslipBuilder() {
       vacRate,
       extraEarnings:    extras.filter(e => e.amount > 0),
       customDeductions: deductions.filter(d => d.amount > 0),
-      ytdPrev: { gross:0, vac:0, cpp1:0, cpp2:0, ei:0, fed:0, prov:0, custom:0, net:0 },
+      ytdPrev: {
+        gross:  ytdGross,
+        vac:    ytdVac,
+        cpp1:   ytdCpp1,
+        cpp2:   ytdCpp2,
+        ei:     ytdEi,
+        fed:    ytdFed,
+        prov:   ytdProv,
+        custom: ytdCustom,
+        net:    ytdNet,
+      },
       periodStart,
       periodEnd,
       payDate,
@@ -98,7 +138,7 @@ export default function PayslipBuilder() {
       payslipNotes: notes,
       selectedTemplate: template,
       logoDataURL:  co.logo_url,
-      displayPeriodNum: null,
+      displayPeriodNum: periodNumber > 0 ? { num: periodNumber, basis: 'year' as const } : null,
     }
   }
 
@@ -281,30 +321,84 @@ export default function PayslipBuilder() {
         <Card>
           <CardTitle>Pay Period &amp; Details</CardTitle>
           <div className="space-y-4">
+
+            {/* Auto-date toggle */}
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" className="sr-only peer" checked={autoDate}
+                  onChange={e => setAutoDate(e.target.checked)} />
+                <div className="w-10 h-5 bg-gray-300 peer-checked:bg-brand-600 rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
+              </label>
+              <span className="text-sm font-medium text-gray-700">Auto-calculate pay dates</span>
+            </div>
+
+            {autoDate ? (
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="First Pay Period Start Date of the Year" type="date" required
+                  value={firstPeriodStart} onChange={e => setFirstPeriodStart(e.target.value)} />
+                <Input label="Pay Period Number" type="number" min={1} max={52} required
+                  value={periodNumber} onChange={e => setPeriodNumber(parseInt(e.target.value)||1)}
+                  hint="Period 1 = first pay period of the year" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Period Start" type="date" required value={periodStart}
+                  onChange={e => setPeriodStart(e.target.value)} />
+                <Input label="Period End" type="date" required value={periodEnd}
+                  onChange={e => setPeriodEnd(e.target.value)} />
+                <Input label="Period Number (optional)" type="number" min={1} max={52}
+                  value={periodNumber || ''} onChange={e => setPeriodNumber(parseInt(e.target.value)||0)}
+                  hint="Used for YTD estimation" />
+              </div>
+            )}
+
+            {/* Pay date offset */}
             <div className="grid grid-cols-2 gap-4">
-              <Input label="Period Start" type="date" required value={periodStart} onChange={e => setPeriodStart(e.target.value)} />
-              <Input label="Period End"   type="date" required value={periodEnd}   onChange={e => setPeriodEnd(e.target.value)} />
-              <Input label="Pay Date"     type="date" required value={payDate}     onChange={e => setPayDate(e.target.value)} />
               <div>
-                <label className="label">Payment Method</label>
-                <div className="flex gap-3 mt-1">
-                  {(['eft', 'cheque'] as const).map(m => (
-                    <label key={m} className={clsx(
-                      'flex items-center gap-2 px-4 py-2.5 rounded-lg border cursor-pointer text-sm font-medium transition-colors flex-1 justify-center',
-                      payMethod === m ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-300 text-gray-600 hover:border-brand-300'
-                    )}>
-                      <input type="radio" className="sr-only" checked={payMethod === m} onChange={() => setPayMethod(m)} />
-                      {m === 'eft' ? '🏦 Direct Deposit' : '📝 Cheque'}
-                    </label>
+                <label className="label">Pay Date Falls</label>
+                <select className="input" value={payDateOffset}
+                  onChange={e => setPayDateOffset(parseInt(e.target.value))}>
+                  <option value={0}>On the last day of the pay period</option>
+                  {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                    <option key={n} value={n}>+{n} business day{n>1?'s':''} after period end</option>
                   ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">Automatically moved earlier if it falls on a weekend or holiday</p>
+              </div>
+              {payDateOffset === 0 && (
+                <Input label="Pay Date" type="date" required value={payDate}
+                  onChange={e => setPayDate(e.target.value)} />
+              )}
+              {payDateOffset > 0 && payDate && (
+                <div>
+                  <label className="label">Pay Date (auto-calculated)</label>
+                  <div className="input bg-gray-50 text-gray-600">{fmtDisplay(payDate)}</div>
+                  <p className="text-xs text-gray-400 mt-1">+{payDateOffset} business days after period end</p>
                 </div>
+              )}
+            </div>
+
+            {/* Payment method */}
+            <div>
+              <label className="label">Payment Method</label>
+              <div className="flex gap-3 mt-1">
+                {(['eft', 'cheque'] as const).map(m => (
+                  <label key={m} className={clsx(
+                    'flex items-center gap-2 px-4 py-2.5 rounded-lg border cursor-pointer text-sm font-medium transition-colors flex-1 justify-center',
+                    payMethod === m ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-300 text-gray-600 hover:border-brand-300'
+                  )}>
+                    <input type="radio" className="sr-only" checked={payMethod === m} onChange={() => setPayMethod(m)} />
+                    {m === 'eft' ? '🏦 Direct Deposit (EFT)' : '📝 Cheque'}
+                  </label>
+                ))}
               </div>
             </div>
 
             {payMethod === 'cheque' && (
               <div className="grid grid-cols-2 gap-4">
                 <Input label="Cheque Number" required value={chequeNum} onChange={e => setChequeNum(e.target.value)} />
-                <Input label="Cheque Date"   type="date" required value={chequeDate} onChange={e => setChequeDate(e.target.value)} />
+                <Input label="Cheque Date" type="date" required value={chequeDate} onChange={e => setChequeDate(e.target.value)}
+                  hint="Used as the pay date on the payslip" />
               </div>
             )}
 
@@ -323,9 +417,10 @@ export default function PayslipBuilder() {
                 ))}
               </div>
               {vacType === 'accruing' && (
-                <div className="mt-3 w-40">
+                <div className="mt-3 w-48">
                   <Input label="Vacation Rate (%)" type="number" min={0} max={20} step={0.5}
-                    value={vacRate} onChange={e => setVacRate(parseFloat(e.target.value) || 4)} />
+                    value={vacRate} onChange={e => setVacRate(parseFloat(e.target.value)||4)}
+                    hint="Provincial minimum: 4% (6% after 5 years)" />
                 </div>
               )}
             </div>
@@ -334,16 +429,17 @@ export default function PayslipBuilder() {
             {selectedEmployee?.emp_type === 'hourly' && (
               <div className="grid grid-cols-3 gap-4">
                 <Input label="Actual Regular Hours" type="number" min={0} step={0.5}
-                  value={actualHours || ''} placeholder="Leave blank = standard"
-                  onChange={e => setActualHours(parseFloat(e.target.value) || 0)} />
+                  value={actualHours||''} placeholder="Leave blank = standard"
+                  onChange={e => setActualHours(parseFloat(e.target.value)||0)} />
                 <Input label="Overtime Hours" type="number" min={0} step={0.5}
-                  value={overtimeHrs || ''} placeholder="0"
-                  onChange={e => setOvertimeHrs(parseFloat(e.target.value) || 0)} />
+                  value={overtimeHrs||''} placeholder="0"
+                  onChange={e => setOvertimeHrs(parseFloat(e.target.value)||0)} />
                 <Select label="OT Multiplier"
                   options={[
                     { value: 1.5, label: '1.5× Time and a half' },
                     { value: 2.0, label: '2.0× Double time' },
                     { value: 2.5, label: '2.5× Double time and a half' },
+                    { value: 1.25, label: '1.25× Custom' },
                     { value: 1.0, label: '1.0× Straight time' },
                   ]}
                   value={overtimeMult}
@@ -355,9 +451,13 @@ export default function PayslipBuilder() {
             <div className="flex justify-between pt-2">
               <button className="btn-ghost" onClick={() => setStep(0)}>← Back</button>
               <button className="btn-primary"
-                disabled={!periodStart || !periodEnd || !payDate || (payMethod === 'cheque' && (!chequeNum || !chequeDate))}
+                disabled={
+                  (autoDate ? !firstPeriodStart : (!periodStart || !periodEnd)) ||
+                  !payDate ||
+                  (payMethod === 'cheque' && (!chequeNum || !chequeDate))
+                }
                 onClick={() => setStep(2)}>
-                Next: Extras →
+                Next: Extras &amp; YTD →
               </button>
             </div>
           </div>
@@ -410,6 +510,35 @@ export default function PayslipBuilder() {
               value={notes} onChange={e => setNotes(e.target.value)} />
           </Card>
 
+          {/* YTD Prior Balances */}
+          <Card>
+            <CardTitle>Year-to-Date Balances <span className="text-gray-400 font-normal normal-case">— prior periods only, optional</span></CardTitle>
+            <p className="text-xs text-gray-400 mb-4">
+              Enter totals from all pay periods <strong>before</strong> this one.
+              Leave at 0 and the app will auto-estimate YTD by multiplying this period × period number.
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: 'YTD Gross Pay',         val: ytdGross,  set: setYtdGross  },
+                { label: 'YTD Vacation Pay',       val: ytdVac,    set: setYtdVac    },
+                { label: 'YTD CPP',                val: ytdCpp1,   set: setYtdCpp1   },
+                { label: 'YTD CPP2',               val: ytdCpp2,   set: setYtdCpp2   },
+                { label: 'YTD EI',                 val: ytdEi,     set: setYtdEi     },
+                { label: 'YTD Federal Tax',        val: ytdFed,    set: setYtdFed    },
+                { label: 'YTD Provincial Tax',     val: ytdProv,   set: setYtdProv   },
+                { label: 'YTD Custom Deductions',  val: ytdCustom, set: setYtdCustom },
+                { label: 'YTD Net Pay',            val: ytdNet,    set: setYtdNet    },
+              ].map(f => (
+                <div key={f.label}>
+                  <label className="label text-xs">{f.label}</label>
+                  <input type="number" className="input text-sm" min={0} step={0.01}
+                    value={f.val || ''} placeholder="0.00"
+                    onChange={e => f.set(parseFloat(e.target.value)||0)} />
+                </div>
+              ))}
+            </div>
+          </Card>
+
           {/* Template */}
           <Card>
             <CardTitle>Payslip Template</CardTitle>
@@ -450,31 +579,83 @@ export default function PayslipBuilder() {
               </div>
             </div>
 
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-2 font-semibold text-gray-600">Description</th>
-                  <th className="text-right py-2 font-semibold text-gray-600">This Period</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                <tr className="bg-gray-50"><td colSpan={2} className="py-1.5 px-2 text-xs font-bold uppercase text-gray-400 tracking-wide">Earnings</td></tr>
-                <tr><td className="py-2">Regular Pay</td><td className="py-2 text-right font-mono">{fmtCAD(result.regularPay)}</td></tr>
-                {result.otPay > 0 && <tr><td className="py-2">Overtime Pay ({overtimeMult}×)</td><td className="py-2 text-right font-mono">{fmtCAD(result.otPay)}</td></tr>}
-                {result.extraLines.map((e, i) => <tr key={i}><td className="py-2">{e.label}</td><td className="py-2 text-right font-mono">{fmtCAD(e.amount)}</td></tr>)}
-                {result.vacPay > 0 && <tr><td className="py-2">Vacation Pay ({vacRate}%)</td><td className="py-2 text-right font-mono">{fmtCAD(result.vacPay)}</td></tr>}
-                <tr className="font-bold bg-blue-50"><td className="py-2">Gross Pay</td><td className="py-2 text-right font-mono">{fmtCAD(result.totalGross)}</td></tr>
-
-                <tr className="bg-gray-50"><td colSpan={2} className="py-1.5 px-2 text-xs font-bold uppercase text-gray-400 tracking-wide">Deductions</td></tr>
-                <tr><td className="py-2">CPP</td><td className="py-2 text-right font-mono text-red-600">−{fmtCAD(result.cpp1)}</td></tr>
-                {result.cpp2 > 0 && <tr><td className="py-2">CPP2</td><td className="py-2 text-right font-mono text-red-600">−{fmtCAD(result.cpp2)}</td></tr>}
-                <tr><td className="py-2">EI</td><td className="py-2 text-right font-mono text-red-600">−{fmtCAD(result.eiEmployee)}</td></tr>
-                <tr><td className="py-2">Federal Tax</td><td className="py-2 text-right font-mono text-red-600">−{fmtCAD(result.fedTax)}</td></tr>
-                <tr><td className="py-2">Provincial Tax ({selectedCompany.province})</td><td className="py-2 text-right font-mono text-red-600">−{fmtCAD(result.provTax)}</td></tr>
-                {result.customDeductLines.map((d, i) => <tr key={i}><td className="py-2">{d.label}</td><td className="py-2 text-right font-mono text-red-600">−{fmtCAD(d.amount)}</td></tr>)}
-                <tr className="font-bold bg-red-50"><td className="py-2">Total Deductions</td><td className="py-2 text-right font-mono">{fmtCAD(result.totalDeductions + result.customDeductTotal)}</td></tr>
-              </tbody>
-            </table>
+          {/* Full YTD earnings/deductions table */}
+          {(() => {
+            const allZero = !ytdGross && !ytdVac && !ytdCpp1 && !ytdCpp2 && !ytdEi && !ytdFed && !ytdProv && !ytdCustom && !ytdNet
+            const pSoFar  = periodNumber > 0 ? periodNumber : 1
+            const ytd = allZero ? {
+              regular: result.regularPay * pSoFar,
+              ot:      result.otPay      * pSoFar,
+              gross:   result.totalGross * pSoFar,
+              vac:     result.vacPay     * pSoFar,
+              cpp1:    result.cpp1       * pSoFar,
+              cpp2:    result.cpp2       * pSoFar,
+              ei:      result.eiEmployee * pSoFar,
+              fed:     result.fedTax     * pSoFar,
+              prov:    result.provTax    * pSoFar,
+              custom:  result.customDeductTotal * pSoFar,
+              net:     result.netPay     * pSoFar,
+              statutory: (result.cpp1 + result.cpp2 + result.eiEmployee + result.fedTax + result.provTax) * pSoFar,
+            } : {
+              regular: Math.max(0, ytdGross - ytdVac) + result.regularPay,
+              ot:      result.otPay,
+              gross:   ytdGross  + result.totalGross,
+              vac:     ytdVac    + result.vacPay,
+              cpp1:    ytdCpp1   + result.cpp1,
+              cpp2:    ytdCpp2   + result.cpp2,
+              ei:      ytdEi     + result.eiEmployee,
+              fed:     ytdFed    + result.fedTax,
+              prov:    ytdProv   + result.provTax,
+              custom:  ytdCustom + result.customDeductTotal,
+              net:     ytdNet    + result.netPay,
+              statutory: (ytdCpp1+ytdCpp2+ytdEi+ytdFed+ytdProv) + (result.cpp1+result.cpp2+result.eiEmployee+result.fedTax+result.provTax),
+            }
+            const row = (label: string, period: number, ytdVal: number | null, bold = false, green = false) => (
+              <tr key={label} className={bold ? 'bg-gray-50 font-semibold' : ''}>
+                <td className={`py-2 text-sm ${green ? 'text-green-700 font-bold' : ''}`}>{label}</td>
+                <td className={`py-2 text-right font-mono text-sm ${green ? 'text-green-700 font-bold' : ''}`}>{fmtCAD(period)}</td>
+                <td className={`py-2 text-right font-mono text-sm ${green ? 'text-green-700 font-bold' : 'text-gray-400'}`}>
+                  {ytdVal !== null ? fmtCAD(ytdVal) : <span className="text-gray-300">—</span>}
+                </td>
+              </tr>
+            )
+            const head = (label: string) => (
+              <tr key={label} className="bg-gray-100">
+                <td colSpan={3} className="py-1.5 px-2 text-xs font-bold uppercase text-gray-400 tracking-wide">{label}</td>
+              </tr>
+            )
+            return (
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b-2 border-gray-200">
+                    <th className="text-left py-2 font-semibold text-gray-600">Description</th>
+                    <th className="text-right py-2 font-semibold text-gray-600">This Period</th>
+                    <th className="text-right py-2 font-semibold text-gray-600">
+                      YTD {allZero && pSoFar > 1 && <span className="text-xs font-normal text-gray-400">(est.)</span>}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {head('Earnings')}
+                  {row('Regular Pay', result.regularPay, ytd.regular)}
+                  {result.otPay > 0 && row(`Overtime Pay (${overtimeMult}×)`, result.otPay, ytd.ot > 0 ? ytd.ot : null)}
+                  {result.extraLines.map((e) => row(e.label, e.amount, allZero ? e.amount * pSoFar : e.amount))}
+                  {result.vacPay > 0 && row(`Vacation Pay (${vacRate}%)`, result.vacPay, ytd.vac)}
+                  {row('Gross Pay', result.totalGross, ytd.gross, true)}
+                  {head('Statutory Deductions')}
+                  {row('CPP', result.cpp1, ytd.cpp1)}
+                  {result.cpp2 > 0 && row('CPP2', result.cpp2, ytd.cpp2)}
+                  {row('EI', result.eiEmployee, ytd.ei)}
+                  {row('Federal Tax', result.fedTax, ytd.fed)}
+                  {row(`Provincial Tax (${selectedCompany.province})`, result.provTax, ytd.prov)}
+                  {row('Total Statutory Deductions', result.totalDeductions, ytd.statutory, true)}
+                  {result.customDeductLines.length > 0 && head('Other Deductions')}
+                  {result.customDeductLines.map((d) => row(d.label, d.amount, allZero ? d.amount * pSoFar : d.amount))}
+                  {result.customDeductLines.length > 0 && row('Total Other Deductions', result.customDeductTotal, ytd.custom, true)}
+                </tbody>
+              </table>
+            )
+          })()}
 
             <div className="mt-4 bg-green-50 border border-green-200 rounded-xl px-5 py-4 flex justify-between items-center">
               <span className="font-bold text-green-800 text-lg">NET PAY</span>
@@ -484,6 +665,47 @@ export default function PayslipBuilder() {
             <div className="mt-3 bg-gray-50 rounded-lg px-4 py-3 text-xs text-gray-500">
               <strong>Employer contributions (not deducted):</strong>{' '}
               Employer CPP {fmtCAD(result.employerCPP)} · Employer EI {fmtCAD(result.eiEmployer)} · Total cost {fmtCAD(result.totalEmployerCost)}
+            </div>
+
+            {/* Remittance summary */}
+            <div className="mt-3 border border-blue-200 rounded-xl overflow-hidden">
+              <div className="bg-blue-50 px-4 py-2 text-xs font-bold uppercase tracking-wide text-blue-700">
+                Employer Remittance to CRA
+              </div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Item</th>
+                    <th className="text-right px-4 py-2 font-semibold text-gray-500">Employee</th>
+                    <th className="text-right px-4 py-2 font-semibold text-gray-500">Employer</th>
+                    <th className="text-right px-4 py-2 font-semibold text-gray-500">Total to Remit</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {[
+                    ['CPP / CPP2', result.cpp1+result.cpp2, result.employerCPP, (result.cpp1+result.cpp2)+result.employerCPP],
+                    ['EI',         result.eiEmployee,        result.eiEmployer,  result.eiEmployee+result.eiEmployer],
+                    ['Federal Tax',result.fedTax,            0,                  result.fedTax],
+                    ['Provincial Tax', result.provTax,       0,                  result.provTax],
+                  ].map(([label, emp, empr, total]) => (
+                    <tr key={label as string}>
+                      <td className="px-4 py-2">{label}</td>
+                      <td className="px-4 py-2 text-right font-mono">{fmtCAD(emp as number)}</td>
+                      <td className="px-4 py-2 text-right font-mono">{(empr as number) > 0 ? fmtCAD(empr as number) : '—'}</td>
+                      <td className="px-4 py-2 text-right font-mono font-semibold">{fmtCAD(total as number)}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-gray-50 font-bold">
+                    <td className="px-4 py-2">Total Remittance</td>
+                    <td className="px-4 py-2 text-right font-mono">{fmtCAD(result.totalDeductions)}</td>
+                    <td className="px-4 py-2 text-right font-mono">{fmtCAD(result.employerCPP+result.eiEmployer)}</td>
+                    <td className="px-4 py-2 text-right font-mono">{fmtCAD(result.totalDeductions+result.employerCPP+result.eiEmployer)}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div className="px-4 py-2 bg-blue-50 text-xs text-blue-600">
+                Due by the 15th of the month following the pay date (regular remitters).
+              </div>
             </div>
           </Card>
 

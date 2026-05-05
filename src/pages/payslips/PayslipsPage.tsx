@@ -1,0 +1,261 @@
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { supabase } from '@/lib/supabase'
+import { useCompanyStore } from '@/store/companyStore'
+import { Card } from '@/components/ui/Card'
+import { fmtCAD } from '@/lib/payrollEngine'
+import type { Payslip, Company, Employee } from '@/types/database'
+import clsx from 'clsx'
+
+// ── Types ─────────────────────────────────────────────────────
+interface EmployeeGroup {
+  employee: Employee
+  payslips: Payslip[]
+}
+interface CompanyGroup {
+  company:   Company
+  employees: EmployeeGroup[]
+  total:     number
+}
+
+function fmtDate(str: string) {
+  if (!str) return ''
+  const [y, m, d] = str.split('-')
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  return `${months[parseInt(m)-1]} ${parseInt(d)}, ${y}`
+}
+
+export default function PayslipsPage() {
+  const { companies, employees, fetchCompanies, fetchEmployees } = useCompanyStore()
+  const [payslips,  setPayslips]  = useState<Payslip[]>([])
+  const [loading,   setLoading]   = useState(true)
+  const [openCos,   setOpenCos]   = useState<Set<string>>(new Set())
+  const [openEmps,  setOpenEmps]  = useState<Set<string>>(new Set())
+  const [deleting,  setDeleting]  = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchCompanies()
+    fetchEmployees()
+    loadPayslips()
+  }, [fetchCompanies, fetchEmployees])
+
+  async function loadPayslips() {
+    setLoading(true)
+    const { data } = await supabase
+      .from('payslips')
+      .select('*')
+      .order('pay_date', { ascending: false })
+    const slips = (data ?? []) as Payslip[]
+    setPayslips(slips)
+    // Auto-expand companies and employees that have payslips
+    const coIds  = new Set(slips.map(p => p.company_id))
+    const empIds = new Set(slips.map(p => p.employee_id))
+    setOpenCos(coIds)
+    setOpenEmps(empIds)
+    setLoading(false)
+  }
+
+  async function handleDelete(payslip: Payslip) {
+    if (!confirm('Delete this payslip? This cannot be undone.')) return
+    setDeleting(payslip.id)
+    // Delete PDF from storage if it exists
+    if (payslip.pdf_url) {
+      // Extract path from signed URL — everything after /object/sign/payslips/
+      const match = payslip.pdf_url.match(/\/object\/sign\/payslips\/(.+?)\?/)
+      if (match) {
+        await supabase.storage.from('payslips').remove([decodeURIComponent(match[1])])
+      }
+    }
+    await supabase.from('payslips').delete().eq('id', payslip.id)
+    setPayslips(prev => prev.filter(p => p.id !== payslip.id))
+    setDeleting(null)
+  }
+
+  // ── Build tree: Company → Employee → Payslips ─────────────────
+  const tree: CompanyGroup[] = companies
+    .map(co => {
+      const coEmps = employees.filter(e => e.company_id === co.id)
+      const empGroups: EmployeeGroup[] = coEmps
+        .map(emp => ({
+          employee: emp,
+          payslips: payslips
+            .filter(p => p.company_id === co.id && p.employee_id === emp.id)
+            .sort((a, b) => b.pay_date.localeCompare(a.pay_date)),
+        }))
+        .filter(g => g.payslips.length > 0)
+
+      return {
+        company:   co,
+        employees: empGroups,
+        total:     empGroups.reduce((s, g) => s + g.payslips.length, 0),
+      }
+    })
+    .filter(g => g.total > 0)
+
+  const toggleCo  = (id: string) => setOpenCos(s  => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const toggleEmp = (id: string) => setOpenEmps(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1>Payslips</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {payslips.length} payslip{payslips.length !== 1 ? 's' : ''} stored in the cloud
+          </p>
+        </div>
+        <Link to="/payslip/new" className="btn-primary">+ New Payslip</Link>
+      </div>
+
+      {loading ? (
+        <Card><p className="text-center text-gray-400 py-10">Loading…</p></Card>
+      ) : tree.length === 0 ? (
+        <Card>
+          <div className="text-center py-12">
+            <div className="text-4xl mb-3">📄</div>
+            <p className="text-gray-500 font-medium mb-1">No payslips yet</p>
+            <p className="text-gray-400 text-sm mb-5">
+              Generate your first payslip and it will be saved here automatically.
+            </p>
+            <Link to="/payslip/new" className="btn-primary">Generate First Payslip →</Link>
+          </div>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {tree.map(({ company, employees: empGroups, total }) => (
+            <div key={company.id} className="card overflow-hidden">
+
+              {/* ── Company row ── */}
+              <button
+                className="w-full flex items-center gap-3 px-5 py-4 bg-brand-600 hover:bg-brand-700 transition-colors text-left"
+                onClick={() => toggleCo(company.id)}
+              >
+                {company.logo_url
+                  ? <img src={company.logo_url} alt="" className="w-8 h-8 rounded object-contain bg-white p-0.5 shrink-0" />
+                  : <div className="w-8 h-8 rounded bg-white/20 text-white font-bold text-sm flex items-center justify-center shrink-0">
+                      {company.name.substring(0,2).toUpperCase()}
+                    </div>
+                }
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-white">{company.name}</div>
+                  <div className="text-brand-200 text-xs">
+                    {empGroups.length} employee{empGroups.length !== 1 ? 's' : ''} · {total} payslip{total !== 1 ? 's' : ''}
+                  </div>
+                </div>
+                <span className="text-white/60 text-lg">{openCos.has(company.id) ? '▾' : '▸'}</span>
+              </button>
+
+              {/* ── Employees under this company ── */}
+              {openCos.has(company.id) && (
+                <div className="divide-y divide-gray-100">
+                  {empGroups.map(({ employee, payslips: slips }) => (
+                    <div key={employee.id}>
+
+                      {/* Employee row */}
+                      <button
+                        className="w-full flex items-center gap-3 px-5 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                        onClick={() => toggleEmp(employee.id)}
+                      >
+                        <div className="w-7 h-7 rounded-full bg-brand-500 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                          {employee.name.split(' ').map(w => w[0]).join('').substring(0,2).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-gray-800 text-sm">{employee.name}</div>
+                          <div className="text-gray-400 text-xs">
+                            {[employee.job_title, employee.department].filter(Boolean).join(' · ') || (employee.emp_type === 'salaried' ? 'Salaried' : 'Hourly')}
+                            {' · '}{slips.length} payslip{slips.length !== 1 ? 's' : ''}
+                          </div>
+                        </div>
+                        <span className="text-gray-400 text-sm">{openEmps.has(employee.id) ? '▾' : '▸'}</span>
+                      </button>
+
+                      {/* Payslip rows for this employee */}
+                      {openEmps.has(employee.id) && (
+                        <div className="bg-white">
+                          <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-0 text-xs font-semibold text-gray-400 uppercase tracking-wide px-5 py-2 border-b border-gray-100">
+                            <span>Pay Period</span>
+                            <span className="text-right pr-6">Gross</span>
+                            <span className="text-right pr-6">Net</span>
+                            <span className="text-right pr-6">Pay Date</span>
+                            <span className="text-right pr-6">PDF</span>
+                            <span></span>
+                          </div>
+                          {slips.map(p => (
+                            <div
+                              key={p.id}
+                              className={clsx(
+                                'grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-0 items-center px-5 py-3 border-b border-gray-50 hover:bg-gray-50 text-sm',
+                                deleting === p.id && 'opacity-40'
+                              )}
+                            >
+                              {/* Pay period */}
+                              <div>
+                                <div className="font-medium text-gray-800">
+                                  {fmtDate(p.period_start)} – {fmtDate(p.period_end)}
+                                </div>
+                                <div className="text-xs text-gray-400 mt-0.5">
+                                  {p.pay_method === 'cheque'
+                                    ? `Cheque${p.cheque_number ? ' #'+p.cheque_number : ''}`
+                                    : 'Direct Deposit'}
+                                  {p.notes && <span className="ml-2 italic">"{p.notes.substring(0,30)}{p.notes.length>30?'…':''}"</span>}
+                                </div>
+                              </div>
+
+                              {/* Gross */}
+                              <div className="text-right pr-6 font-mono text-gray-700">
+                                {fmtCAD(p.gross_pay)}
+                              </div>
+
+                              {/* Net */}
+                              <div className="text-right pr-6 font-mono font-semibold text-green-700">
+                                {fmtCAD(p.net_pay)}
+                              </div>
+
+                              {/* Pay date */}
+                              <div className="text-right pr-6 text-gray-500 text-xs">
+                                {fmtDate(p.pay_date)}
+                              </div>
+
+                              {/* PDF download */}
+                              <div className="text-right pr-6">
+                                {p.pdf_url ? (
+                                  <a
+                                    href={p.pdf_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-brand-600 hover:text-brand-800 font-semibold text-xs"
+                                  >
+                                    ⬇ PDF
+                                  </a>
+                                ) : (
+                                  <span className="text-gray-300 text-xs">No PDF</span>
+                                )}
+                              </div>
+
+                              {/* Delete */}
+                              <div className="text-right">
+                                <button
+                                  className="text-gray-300 hover:text-red-500 transition-colors text-xs px-1"
+                                  onClick={() => handleDelete(p)}
+                                  disabled={deleting === p.id}
+                                  title="Delete payslip"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

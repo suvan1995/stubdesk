@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useLimitsStore } from '@/store/limitsStore'
 import { useCompanyStore } from '@/store/companyStore'
 import { aggregateT4FromPayslips, generateT4XML } from '@/lib/t4Engine'
+import { generateT4PDF } from '@/lib/t4PdfGenerator'
 import { Card } from '@/components/ui/Card'
 import clsx from 'clsx'
 import type { T4Slip, Payslip, Company } from '@/types/database'
@@ -207,6 +208,23 @@ export default function T4ListPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2 justify-end">
+                        <button
+                          className="flex items-center gap-1 px-3 py-1.5 border border-green-300 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-50 transition-colors"
+                          onClick={() => {
+                            const emp = employees.find(e => e.id === t4.employee_id)
+                            const co  = companies.find(c => c.id === t4.company_id)
+                            if (!emp || !co) return
+                            const blob = generateT4PDF(t4, co, emp)
+                            const url  = URL.createObjectURL(blob)
+                            const a    = document.createElement('a')
+                            a.href     = url
+                            a.download = `T4_${emp.name.replace(/\s+/g,'_')}_${t4.tax_year}.pdf`
+                            a.click()
+                            URL.revokeObjectURL(url)
+                          }}
+                        >
+                          ⬇ PDF
+                        </button>
                         <button className="text-brand-600 hover:underline text-xs font-medium"
                           onClick={() => navigate(`/t4/${t4.id}/edit`)}>
                           Edit

@@ -8,7 +8,7 @@ const nav = [
   { to: '/employees',   label: 'Employees',         icon: '👥' },
   { to: '/remittance',  label: 'Remittance',        icon: '🏦' },
   { to: '/companies',   label: 'Company',           icon: '🏢' },
-  { to: '/t4',          label: 'T4 Slips',          icon: '🗂' },
+  { to: '/yearend',     label: 'Year-End Forms',    icon: '🗂' },
   { to: '/roe',         label: 'ROE',               icon: '📋' },
   { to: '/payslips',    label: 'Pay History',       icon: '📄' },
   { to: '/billing',     label: 'My Subscription',   icon: '💳' },

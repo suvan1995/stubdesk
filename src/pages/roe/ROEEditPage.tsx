@@ -6,6 +6,7 @@ import { useCompanyStore } from '@/store/companyStore'
 import { fmtDisplay } from '@/lib/dateUtils'
 import { ROE_REASON_CODES, PAY_PERIOD_TYPE_LABELS } from '@/types/database'
 import type { ROE } from '@/types/database'
+import { generateROEPDF } from '@/lib/roePdfGenerator'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import { Card, CardTitle } from '@/components/ui/Card'
@@ -92,6 +93,18 @@ export default function ROEEditPage() {
 
   function set(key: keyof ROE, val: unknown) {
     setRoe(prev => ({ ...prev, [key]: val }))
+  }
+
+  function handleDownload() {
+    if (!selectedCo || !selectedEmp) { alert('Save the ROE first, then download.'); return }
+    const payload = { ...roe, insurable_earnings_by_period: earningsByPeriod } as ROE
+    const blob = generateROEPDF(payload, selectedCo, selectedEmp)
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `ROE_${selectedEmp.name.replace(/\s+/g,'_')}_${roe.last_day_paid ?? 'draft'}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   async function handleSave(status: 'draft' | 'issued') {
@@ -300,6 +313,9 @@ export default function ROEEditPage() {
         </button>
         <button className="btn-success" onClick={() => handleSave('issued')} disabled={saving}>
           {saving ? 'Saving…' : '✓ Mark as Issued'}
+        </button>
+        <button className="btn-secondary" onClick={handleDownload}>
+          ⬇ Download PDF
         </button>
         <button className="btn-ghost" onClick={() => navigate('/roe')}>Cancel</button>
       </div>

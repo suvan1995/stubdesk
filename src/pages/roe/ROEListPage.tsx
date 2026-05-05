@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useCompanyStore } from '@/store/companyStore'
 import { fmtDisplay } from '@/lib/dateUtils'
 import { ROE_REASON_CODES } from '@/types/database'
+import { generateROEPDF } from '@/lib/roePdfGenerator'
 import type { ROE } from '@/types/database'
 import clsx from 'clsx'
 
@@ -31,6 +32,19 @@ export default function ROEListPage() {
     if (!confirm('Delete this ROE?')) return
     await supabase.from('roes').delete().eq('id', id)
     setRoes(prev => prev.filter(r => r.id !== id))
+  }
+
+  function handleDownload(roe: ROE) {
+    const emp = empMap.get(roe.employee_id)
+    const co  = coMap.get(roe.company_id)
+    if (!emp || !co) { alert('Employee or company data not loaded yet.'); return }
+    const blob = generateROEPDF(roe, co, emp)
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `ROE_${emp.name.replace(/\s+/g,'_')}_${roe.last_day_paid}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const empMap = new Map(employees.map(e => [e.id, e]))
@@ -101,6 +115,13 @@ export default function ROEListPage() {
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-1.5 justify-end">
+                        <button
+                          className="flex items-center gap-1 px-3 py-1.5 border border-green-300 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-50 transition-colors"
+                          onClick={() => handleDownload(roe)}
+                          title="Download PDF"
+                        >
+                          ⬇ PDF
+                        </button>
                         <button
                           className="flex items-center gap-1 px-3 py-1.5 border border-brand-300 text-brand-600 rounded-lg text-xs font-semibold hover:bg-brand-50 transition-colors"
                           onClick={() => navigate(`/roe/${roe.id}/edit`)}

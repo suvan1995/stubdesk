@@ -214,3 +214,62 @@ export const PAY_PERIOD_TYPE_LABELS: Record<string, string> = {
   A: '13 periods/year',
   O: 'Other',
 }
+
+// ── T4A — Statement of Pension, Retirement, Annuity, and Other Income ────────
+// Used for self-employed contractors, pension, RRSP, fees for services, etc.
+export interface T4ASlip {
+  id:                    string
+  user_id:               string
+  company_id:            string
+  recipient_name:        string
+  recipient_address:     string | null
+  recipient_sin:         string | null
+  tax_year:              number
+  // Core boxes
+  box_16_pension:        number   // Pension or superannuation
+  box_18_lump_sum:       number   // Lump-sum payments
+  box_20_self_employed:  number   // Self-employment commissions
+  box_22_income_tax:     number   // Income tax deducted
+  box_24_annuities:      number   // Annuities
+  box_28_other_income:   number   // Other income
+  box_48_fees_services:  number   // Fees for services (T4A box 048)
+  // Manual boxes
+  box_30_patronage:      number | null
+  box_32_rpp:            number | null
+  box_34_pension_adj:    number | null
+  box_40_research:       number | null
+  box_42_reimbursements: number | null
+  box_46_charitable:     number | null
+  notes:                 string | null
+  status:                'draft' | 'final' | 'filed'
+  created_at:            string
+  updated_at:            string
+}
+
+// ── T5 — Statement of Investment Income ──────────────────────────────────────
+export interface T5Slip {
+  id:                    string
+  user_id:               string
+  company_id:            string
+  recipient_name:        string
+  recipient_address:     string | null
+  recipient_sin:         string | null
+  tax_year:              number
+  box_10_eligible_dividends:     number
+  box_11_taxable_eligible:       number   // box_10 × 1.38
+  box_12_dividend_tax_credit:    number   // box_11 × 15.0198%
+  box_13_interest:               number
+  box_14_other_income:           number
+  box_15_foreign_income:         number
+  box_16_foreign_tax:            number
+  box_17_royalties:              number
+  box_18_capital_gains_dividends: number
+  box_21_acb_adjustment:         number | null
+  box_24_ineligible_dividends:   number
+  box_25_taxable_ineligible:     number   // box_24 × 1.15
+  box_26_ineligible_tax_credit:  number   // box_25 × 9.0301%
+  notes:                 string | null
+  status:                'draft' | 'final' | 'filed'
+  created_at:            string
+  updated_at:            string
+}

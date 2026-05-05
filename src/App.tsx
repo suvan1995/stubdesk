@@ -19,6 +19,11 @@ import PayrollSummaryPage from '@/pages/payroll/PayrollSummaryPage'
 import RemittancePage    from '@/pages/remittance/RemittancePage'
 import ROEListPage       from '@/pages/roe/ROEListPage'
 import ROEEditPage       from '@/pages/roe/ROEEditPage'
+import YearEndPage       from '@/pages/yearend/YearEndPage'
+import T4AListPage       from '@/pages/yearend/T4AListPage'
+import T4AEditPage       from '@/pages/yearend/T4AEditPage'
+import T5ListPage        from '@/pages/yearend/T5ListPage'
+import T5EditPage        from '@/pages/yearend/T5EditPage'
 import SettingsPage      from '@/pages/settings/SettingsPage'
 import BillingPage       from '@/pages/billing/BillingPage'
 import NotFoundPage      from '@/pages/NotFoundPage'
@@ -98,9 +103,19 @@ export default function App() {
           <Route path="/payslips"   element={<PayslipsPage />} />
           <Route path="/payroll"    element={<PayrollSummaryPage />} />
           <Route path="/remittance" element={<RemittancePage />} />
-          <Route path="/t4"         element={<T4ListPage />} />
-          <Route path="/t4/new"     element={<T4EditPage />} />
+          <Route path="/t4"          element={<T4ListPage />} />
+          <Route path="/t4/new"      element={<T4EditPage />} />
           <Route path="/t4/:id/edit" element={<T4EditPage />} />
+          <Route path="/yearend"              element={<YearEndPage />} />
+          <Route path="/yearend/t4"           element={<T4ListPage />} />
+          <Route path="/yearend/t4/new"       element={<T4EditPage />} />
+          <Route path="/yearend/t4/:id/edit"  element={<T4EditPage />} />
+          <Route path="/yearend/t4a"          element={<T4AListPage />} />
+          <Route path="/yearend/t4a/new"      element={<T4AEditPage />} />
+          <Route path="/yearend/t4a/:id/edit" element={<T4AEditPage />} />
+          <Route path="/yearend/t5"           element={<T5ListPage />} />
+          <Route path="/yearend/t5/new"       element={<T5EditPage />} />
+          <Route path="/yearend/t5/:id/edit"  element={<T5EditPage />} />
           <Route path="/roe"         element={<ROEListPage />} />
           <Route path="/roe/new"     element={<ROEEditPage />} />
           <Route path="/roe/:id/edit" element={<ROEEditPage />} />

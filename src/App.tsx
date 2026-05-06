@@ -3,6 +3,8 @@ import { Routes, Route } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useLimitsStore } from '@/store/limitsStore'
+import { useTaxStore } from '@/store/taxStore'
+import { setLiveTaxConstants } from '@/lib/payrollEngine'
 
 // Pages — user app
 import LandingPage       from '@/pages/LandingPage'
@@ -33,6 +35,7 @@ import AdminLayout       from '@/pages/admin/AdminLayout'
 import AdminOverviewPage from '@/pages/admin/AdminOverviewPage'
 import AdminUsersPage    from '@/pages/admin/AdminUsersPage'
 import AdminPlansPage    from '@/pages/admin/AdminPlansPage'
+import AdminTaxPage      from '@/pages/admin/AdminTaxPage'
 
 // Layout & guards
 import AppLayout         from '@/components/layout/AppLayout'
@@ -42,6 +45,10 @@ import PlanGuard         from '@/components/auth/PlanGuard'
 export default function App() {
   const { setSession, fetchProfile, loading } = useAuthStore()
   const { fetchLimits, fetchUsage } = useLimitsStore()
+  const { fetchConstants, constants } = useTaxStore()
+
+  // Keep engine in sync whenever DB constants change
+  useEffect(() => { setLiveTaxConstants(constants) }, [constants])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -51,7 +58,8 @@ export default function App() {
           const plan = useAuthStore.getState().profile?.plan ?? 'free'
           fetchLimits(plan)
           fetchUsage(session.user.id)
-          useAuthStore.setState({ loading: false })  // done only after profile loaded
+          fetchConstants(2026)   // load live tax constants from DB
+          useAuthStore.setState({ loading: false })
         })
       } else {
         useAuthStore.setState({ loading: false })    // no session — done immediately
@@ -74,7 +82,7 @@ export default function App() {
     })
 
     return () => subscription.unsubscribe()
-  }, [setSession, fetchProfile, fetchLimits, fetchUsage])
+  }, [setSession, fetchProfile, fetchLimits, fetchUsage, fetchConstants])
 
   if (loading) {
     return (
@@ -133,6 +141,7 @@ export default function App() {
           <Route index          element={<AdminOverviewPage />} />
           <Route path="users"   element={<AdminUsersPage />} />
           <Route path="plans"   element={<AdminPlansPage />} />
+          <Route path="tax"     element={<AdminTaxPage />} />
         </Route>
       </Route>
 

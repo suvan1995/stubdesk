@@ -3,9 +3,10 @@ import { useAuthStore } from '@/store/authStore'
 import clsx from 'clsx'
 
 const adminNav = [
-  { to: '/admin',          label: 'Overview',    icon: '⊞', end: true },
-  { to: '/admin/users',    label: 'Users',       icon: '👥' },
-  { to: '/admin/plans',    label: 'Plan Limits', icon: '⚙' },
+  { to: '/admin',          label: 'Overview',      icon: '⊞', end: true },
+  { to: '/admin/users',    label: 'Users',         icon: '👥' },
+  { to: '/admin/plans',    label: 'Plan Limits',   icon: '⚙' },
+  { to: '/admin/tax',      label: 'Tax Constants', icon: '🧮' },
 ]
 
 export default function AdminLayout() {

@@ -156,16 +156,20 @@ export default function PayslipBuilder() {
   function buildInputs(): PayslipInputs {
     const emp = selectedEmployee!
     const co  = selectedCompany!
+    // Force-parse all numeric fields — Supabase returns numeric columns as strings
+    const rate        = parseFloat(String(emp.rate))           || 0
+    const stdHours    = parseFloat(String(emp.std_weekly_hours)) || 40
+    const payFreq     = parseInt(String(emp.pay_frequency))    || 26
     return {
       province:    co.province,
       empType:     emp.emp_type,
-      annualSalary: emp.emp_type === 'salaried' ? emp.rate : 0,
-      hourlyRate:  emp.emp_type === 'hourly'   ? emp.rate : 0,
-      stdWeeklyHours: emp.std_weekly_hours,
+      annualSalary: emp.emp_type === 'salaried' ? rate : 0,
+      hourlyRate:  emp.emp_type === 'hourly'   ? rate : 0,
+      stdWeeklyHours: stdHours,
       actualHours,
       overtimeHours: overtimeHrs,
       overtimeMultiplier: overtimeMult,
-      periods:     emp.pay_frequency as 52|26|24|12,
+      periods:     payFreq as 52|26|24|12,
       vacType,
       vacRate,
       extraEarnings:    extras.filter(e => e.amount > 0),

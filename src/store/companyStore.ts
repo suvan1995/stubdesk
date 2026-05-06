@@ -41,7 +41,14 @@ export const useCompanyStore = create<CompanyState>((set, get) => ({
     let query = (supabase.from('employees') as any).select('*').order('name')
     if (companyId) query = query.eq('company_id', companyId)
     const { data } = await query
-    set({ employees: (data ?? []) as Employee[] })
+    // Supabase returns numeric columns as strings — parse them
+    const parsed = ((data ?? []) as Employee[]).map(e => ({
+      ...e,
+      rate:             parseFloat(String(e.rate))             || 0,
+      std_weekly_hours: parseFloat(String(e.std_weekly_hours)) || 40,
+      pay_frequency:    (parseInt(String(e.pay_frequency))     || 26) as 52|26|24|12,
+    }))
+    set({ employees: parsed })
   },
 
   createCompany: async (data) => {
@@ -83,9 +90,17 @@ export const useCompanyStore = create<CompanyState>((set, get) => ({
   createEmployee: async (data) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
+    // Ensure numeric fields are numbers, not strings
+    const payload = {
+      ...data,
+      rate:             parseFloat(String(data.rate))             || 0,
+      std_weekly_hours: parseFloat(String(data.std_weekly_hours)) || 40,
+      pay_frequency:    parseInt(String(data.pay_frequency))      || 26,
+      user_id: user.id,
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: created, error } = await (supabase.from('employees') as any)
-      .insert({ ...data, user_id: user.id })
+      .insert(payload)
       .select()
       .single()
     if (error || !created) return null

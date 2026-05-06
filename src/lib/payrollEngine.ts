@@ -1,7 +1,15 @@
 import { TAX_CONSTANTS_2026 } from './taxConstants'
-import type { PayslipInputs, PayslipResult, TaxBracket } from '@/types/payroll'
+import type { PayslipInputs, PayslipResult, TaxBracket, TaxConstants } from '@/types/payroll'
 
-const C = TAX_CONSTANTS_2026
+// Live constants — updated from DB via taxStore, falls back to hardcoded 2026
+let _liveConstants: TaxConstants = TAX_CONSTANTS_2026
+
+export function setLiveTaxConstants(c: TaxConstants) {
+  _liveConstants = c
+}
+
+// Always read through this getter so the engine uses whatever is current
+function C(): TaxConstants { return _liveConstants }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -14,25 +22,43 @@ function calcBracketTax(income: number, brackets: TaxBracket[]): number {
   return Math.max(0, tax)
 }
 
-export function calcCPP(periodGross: number, ytdGrossPrior: number) {
-  const cpp1Low  = C.CPP1_BASIC_EXEMPTION
-  const cpp1High = C.CPP1_MAX_PENSIONABLE
+export function calcCPP(periodGross: number, ytdGrossPrior: number, periods = 26) {
+  // CRA T4127 method: prorate the $3,500 annual basic exemption per pay period.
+  // This ensures CPP is collected every period rather than being zero until
+  // cumulative earnings exceed $3,500.
+  //
+  // Per-period exemption = $3,500 / number of pay periods
+  // Contributory earnings this period = periodGross - periodExemption
+  // Capped at the per-period YMPE ceiling.
 
-  const priorCPP1Contributory = Math.max(0, Math.min(ytdGrossPrior, cpp1High) - cpp1Low)
-  const priorCPP1Paid         = priorCPP1Contributory * C.CPP1_RATE
-  const thisCPP1Contributory  = Math.max(0,
-    Math.min(ytdGrossPrior + periodGross, cpp1High) - Math.max(ytdGrossPrior, cpp1Low)
+  const annualExemption = C().CPP1_BASIC_EXEMPTION   // $3,500
+  const periodExemption = annualExemption / periods  // e.g. $134.62 for bi-weekly
+
+  // CPP1 — contributory earnings this period (prorated exemption method)
+  const cpp1PeriodContributory = Math.max(0, periodGross - periodExemption)
+  // Cap at per-period YMPE ceiling
+  const cpp1PeriodCeiling = (C().CPP1_MAX_PENSIONABLE - annualExemption) / periods
+  const cpp1Contributory  = Math.min(cpp1PeriodContributory, cpp1PeriodCeiling)
+  const cpp1Raw           = cpp1Contributory * C().CPP1_RATE
+
+  // Annual cap check — don't exceed CPP1_MAX_EMPLOYEE across all periods
+  // Use ytdGrossPrior to estimate how much CPP1 has already been paid
+  const priorContributory = Math.max(0,
+    Math.min(ytdGrossPrior, C().CPP1_MAX_PENSIONABLE) - annualExemption
   )
-  const cpp1 = Math.min(thisCPP1Contributory * C.CPP1_RATE, C.CPP1_MAX_EMPLOYEE - priorCPP1Paid)
+  const priorCPP1Paid = priorContributory * C().CPP1_RATE
+  const cpp1 = Math.min(cpp1Raw, Math.max(0, C().CPP1_MAX_EMPLOYEE - priorCPP1Paid))
 
-  const cpp2Low  = C.CPP1_MAX_PENSIONABLE
-  const cpp2High = C.CPP2_CEILING
+  // CPP2 — only applies once annual earnings exceed YMPE ($74,600)
+  // Use cumulative YTD approach for CPP2 (no per-period exemption for CPP2)
+  const cpp2Low  = C().CPP1_MAX_PENSIONABLE
+  const cpp2High = C().CPP2_CEILING
   const priorCPP2Contributory = Math.max(0, Math.min(ytdGrossPrior, cpp2High) - cpp2Low)
-  const priorCPP2Paid         = priorCPP2Contributory * C.CPP2_RATE
+  const priorCPP2Paid         = priorCPP2Contributory * C().CPP2_RATE
   const thisCPP2Contributory  = Math.max(0,
     Math.min(ytdGrossPrior + periodGross, cpp2High) - Math.max(ytdGrossPrior, cpp2Low)
   )
-  const cpp2 = Math.min(thisCPP2Contributory * C.CPP2_RATE, C.CPP2_MAX_EMPLOYEE - priorCPP2Paid)
+  const cpp2 = Math.min(thisCPP2Contributory * C().CPP2_RATE, C().CPP2_MAX_EMPLOYEE - priorCPP2Paid)
 
   return {
     cpp1: Math.max(0, cpp1),
@@ -42,15 +68,15 @@ export function calcCPP(periodGross: number, ytdGrossPrior: number) {
 }
 
 export function calcEI(periodGross: number, periods: number) {
-  const maxPeriod = C.EI_MAX_EMPLOYEE / periods
-  const insurable = Math.min(periodGross, C.EI_MAX_INSURABLE / periods)
-  const employee  = Math.min(insurable * C.EI_EMPLOYEE_RATE, maxPeriod)
-  return { employee, employer: employee * C.EI_EMPLOYER_MULT }
+  const maxPeriod = C().EI_MAX_EMPLOYEE / periods
+  const insurable = Math.min(periodGross, C().EI_MAX_INSURABLE / periods)
+  const employee  = Math.min(insurable * C().EI_EMPLOYEE_RATE, maxPeriod)
+  return { employee, employer: employee * C().EI_EMPLOYER_MULT }
 }
 
 export function calcFederalTax(annualGross: number, annualCPP: number, annualEI: number): number {
-  const credits  = (C.FED_BASIC_PERSONAL + annualCPP + annualEI) * C.FED_CREDIT_RATE
-  return Math.max(0, calcBracketTax(annualGross, C.FED_BRACKETS) - credits)
+  const credits  = (C().FED_BASIC_PERSONAL + annualCPP + annualEI) * C().FED_CREDIT_RATE
+  return Math.max(0, calcBracketTax(annualGross, C().FED_BRACKETS) - credits)
 }
 
 export function calcProvincialTax(
@@ -61,17 +87,17 @@ export function calcProvincialTax(
 ): number {
   let brackets, basicPersonal, creditRate
   if (province === 'ON') {
-    brackets = C.ON_BRACKETS; basicPersonal = C.ON_BASIC_PERSONAL; creditRate = C.ON_CREDIT_RATE
+    brackets = C().ON_BRACKETS; basicPersonal = C().ON_BASIC_PERSONAL; creditRate = C().ON_CREDIT_RATE
   } else if (province === 'AB') {
-    brackets = C.AB_BRACKETS; basicPersonal = C.AB_BASIC_PERSONAL; creditRate = C.AB_CREDIT_RATE
+    brackets = C().AB_BRACKETS; basicPersonal = C().AB_BASIC_PERSONAL; creditRate = C().AB_CREDIT_RATE
   } else {
-    brackets = C.BC_BRACKETS; basicPersonal = C.BC_BASIC_PERSONAL; creditRate = C.BC_CREDIT_RATE
+    brackets = C().BC_BRACKETS; basicPersonal = C().BC_BASIC_PERSONAL; creditRate = C().BC_CREDIT_RATE
   }
   const credits = (basicPersonal + annualCPP + annualEI) * creditRate
   let tax = Math.max(0, calcBracketTax(annualGross, brackets) - credits)
   if (province === 'ON') {
-    if (tax > C.ON_SURTAX1_THRESHOLD) tax += (tax - C.ON_SURTAX1_THRESHOLD) * C.ON_SURTAX1_RATE
-    if (tax > C.ON_SURTAX2_THRESHOLD) tax += (tax - C.ON_SURTAX2_THRESHOLD) * C.ON_SURTAX2_RATE
+    if (tax > C().ON_SURTAX1_THRESHOLD) tax += (tax - C().ON_SURTAX1_THRESHOLD) * C().ON_SURTAX1_RATE
+    if (tax > C().ON_SURTAX2_THRESHOLD) tax += (tax - C().ON_SURTAX2_THRESHOLD) * C().ON_SURTAX2_RATE
   }
   return Math.max(0, tax)
 }
@@ -105,7 +131,7 @@ export function calculatePayslip(inputs: PayslipInputs): PayslipResult {
   const totalGross = baseGross + vacPay
 
   const ytdGrossPrior = ytdPrev?.gross ?? 0
-  const cpp = calcCPP(totalGross, ytdGrossPrior)
+  const cpp = calcCPP(totalGross, ytdGrossPrior, periods)
   const ei  = calcEI(totalGross, periods)
 
   const annualGross  = totalGross * periods

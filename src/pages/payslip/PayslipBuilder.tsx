@@ -259,6 +259,7 @@ export default function PayslipBuilder() {
     // 3. Save payslip record with pdf_url
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase.from('payslips') as any).insert({
+      user_id:           profile.id,
       company_id:        selectedCompany.id,
       employee_id:       selectedEmployee.id,
       period_start:      periodStart,

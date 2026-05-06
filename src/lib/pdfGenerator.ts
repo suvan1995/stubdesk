@@ -154,7 +154,9 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
     tx(fmtCAD(period), margin+labelW+amtW-3, y+4.5, { align: 'right' })
     if (ytd !== null) {
       sf(bold ? 'bold' : 'normal', 8.5, bold ? T.primary as number[] : [100,100,100])
-      tx(fmtCAD(ytd), margin+fullW-3, y+4.5, { align: 'right' })
+      // YTD includes current period + prior periods
+      const ytdTotal = ytd + period
+      tx(fmtCAD(ytdTotal), margin+fullW-3, y+4.5, { align: 'right' })
     } else {
       sf('normal', 8.5, [180,180,180])
       tx('—', margin+fullW-3, y+4.5, { align: 'right' })
@@ -176,7 +178,12 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   tableRow('Regular Pay', result.regularPay, result.regularPay, false)
   if (result.otPay > 0) tableRow(`Overtime Pay (${opts.overtimeMult}×)`, result.otPay, result.otPay, false)
   result.extraLines.forEach(e => tableRow(e.label, e.amount, e.amount, false))
-  if (result.vacPay > 0) tableRow(`Vacation Pay (${opts.vacRate}%)`, result.vacPay, result.vacPay, false)
+  // Always show vacation pay line, even when included
+  if (opts.vacType === 'included') {
+    tableRow(`Vacation Pay (${opts.vacRate}% - included in rate)`, 0, 0, false)
+  } else if (result.vacPay > 0) {
+    tableRow(`Vacation Pay (${opts.vacRate}%)`, result.vacPay, result.vacPay, false)
+  }
   tableRow('Gross Pay', result.totalGross, result.totalGross, true, T.rowHL)
 
   // Deductions
@@ -235,7 +242,7 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   if (opts.vacType === 'included') {
     fr(margin, y, fullW, 7, [234,244,253])
     sf('italic', 8, gray as number[])
-    tx('Vacation pay is included in the salary/wage rate.', margin+3, y+5)
+    tx(`Vacation pay at ${opts.vacRate}% is included in the salary/wage rate (not shown separately in gross pay).`, margin+3, y+5)
     y += 10
   } else if (result.vacPay > 0) {
     fr(margin, y, fullW, 7, [234,244,253])
@@ -375,7 +382,9 @@ function generateQuickBooksStyle(opts: PayslipPDFOptions): Blob {
     ['Regular Pay', result.regularPay],
     ...(result.otPay > 0 ? [[`Overtime (${opts.overtimeMult}×)`, result.otPay] as [string,number]] : []),
     ...result.extraLines.map(e => [e.label, e.amount] as [string,number]),
-    ...(result.vacPay > 0 ? [[`Vacation Pay (${opts.vacRate}%)`, result.vacPay] as [string,number]] : []),
+    // Always show vacation pay line, even when included
+    ...(opts.vacType === 'included' ? [[`Vacation Pay (${opts.vacRate}% - included)`, 0] as [string,number]] : 
+        result.vacPay > 0 ? [[`Vacation Pay (${opts.vacRate}%)`, result.vacPay] as [string,number]] : []),
   ]
   // Build deductions rows
   const deductRows: [string, number][] = [
@@ -546,7 +555,9 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
     tx(fmtCAD(period), mg + descW + perW - 3, y + 4.5, { align: 'right' })
     if (ytd !== null) {
       sf(bold ? 'bold' : 'normal', 8, bold ? navy : mgray)
-      tx(fmtCAD(ytd), mg + fw - 3, y + 4.5, { align: 'right' })
+      // YTD includes current period + prior periods
+      const ytdTotal = ytd + period
+      tx(fmtCAD(ytdTotal), mg + fw - 3, y + 4.5, { align: 'right' })
     } else {
       sf('normal', 8, [200,200,200] as [number,number,number])
       tx('—', mg + fw - 3, y + 4.5, { align: 'right' })
@@ -564,7 +575,12 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
   tableRow('Regular Pay', result.regularPay, result.regularPay)
   if (result.otPay > 0) tableRow(`Overtime Pay (${opts.overtimeMult}×)`, result.otPay, result.otPay)
   result.extraLines.forEach(e => tableRow(e.label, e.amount, e.amount))
-  if (result.vacPay > 0) tableRow(`Vacation Pay (${opts.vacRate}%)`, result.vacPay, result.vacPay)
+  // Always show vacation pay line, even when included
+  if (opts.vacType === 'included') {
+    tableRow(`Vacation Pay (${opts.vacRate}% - included in rate)`, 0, 0)
+  } else if (result.vacPay > 0) {
+    tableRow(`Vacation Pay (${opts.vacRate}%)`, result.vacPay, result.vacPay)
+  }
   tableRow('Gross Pay', result.totalGross, result.totalGross, true)
 
   // Deductions

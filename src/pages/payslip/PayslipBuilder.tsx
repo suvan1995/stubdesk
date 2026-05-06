@@ -806,7 +806,7 @@ export default function PayslipBuilder() {
                   {head('Earnings')}
                   {row('Regular Pay', result.regularPay, ytd.regular)}
                   {result.otPay > 0 && row(`Overtime Pay (${overtimeMult}×)`, result.otPay, ytd.ot > 0 ? ytd.ot : null)}
-                  {result.extraLines.map((e) => row(e.label, e.amount, allZero ? e.amount * pSoFar : e.amount))}
+                  {result.extraLines.map((e) => row(e.label, e.amount, null))}
                   {result.vacPay > 0 && row(`Vacation Pay (${vacRate}%)`, result.vacPay, ytd.vac)}
                   {row('Gross Pay', result.totalGross, ytd.gross, true)}
                   {head('Statutory Deductions')}
@@ -823,7 +823,7 @@ export default function PayslipBuilder() {
                   )}
                   {row('Total Statutory Deductions', result.totalDeductions, ytd.statutory, true)}
                   {result.customDeductLines.length > 0 && head('Other Deductions')}
-                  {result.customDeductLines.map((d) => row(d.label, d.amount, allZero ? d.amount * pSoFar : d.amount))}
+                  {result.customDeductLines.map((d) => row(d.label, d.amount, null))}
                   {result.customDeductLines.length > 0 && row('Total Other Deductions', result.customDeductTotal, ytd.custom, true)}
                 </tbody>
               </table>

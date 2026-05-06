@@ -178,8 +178,8 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   // Earnings
   sectionHead('Earnings')
   tableRow('Regular Pay', result.regularPay, opts.ytdPrev.gross - opts.ytdPrev.vac, false)
-  if (result.otPay > 0) tableRow(`Overtime Pay (${opts.overtimeMult}×)`, result.otPay, 0, false)
-  result.extraLines.forEach(e => tableRow(e.label, e.amount, 0, false))
+  if (result.otPay > 0) tableRow(`Overtime Pay (${opts.overtimeMult}×)`, result.otPay, null, false)
+  result.extraLines.forEach(e => tableRow(e.label, e.amount, null, false))
   // Always show vacation pay line, even when included
   if (opts.vacType === 'included') {
     tableRow(`Vacation Pay (${opts.vacRate}% - included in rate)`, 0, 0, false)
@@ -203,7 +203,7 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
 
   if (result.customDeductLines.length > 0) {
     sectionHead('Other Deductions')
-    result.customDeductLines.forEach(d => tableRow(d.label, d.amount, 0, false))
+    result.customDeductLines.forEach(d => tableRow(d.label, d.amount, null, false))
     tableRow('Total Other Deductions', result.customDeductTotal, opts.ytdPrev.custom, true, T.rowHL)
   }
 
@@ -583,8 +583,8 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
   // Earnings
   sectionHead('Earnings')
   tableRow('Regular Pay', result.regularPay, opts.ytdPrev.gross - opts.ytdPrev.vac)
-  if (result.otPay > 0) tableRow(`Overtime Pay (${opts.overtimeMult}×)`, result.otPay, 0)
-  result.extraLines.forEach(e => tableRow(e.label, e.amount, 0))
+  if (result.otPay > 0) tableRow(`Overtime Pay (${opts.overtimeMult}×)`, result.otPay, null)
+  result.extraLines.forEach(e => tableRow(e.label, e.amount, null))
   // Always show vacation pay line, even when included
   if (opts.vacType === 'included') {
     tableRow(`Vacation Pay (${opts.vacRate}% - included in rate)`, 0, 0)
@@ -608,7 +608,7 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
 
   if (result.customDeductLines.length > 0) {
     sectionHead('Other Deductions')
-    result.customDeductLines.forEach(d => tableRow(d.label, d.amount, 0))
+    result.customDeductLines.forEach(d => tableRow(d.label, d.amount, null))
     tableRow('Total Other Deductions', result.customDeductTotal, opts.ytdPrev.custom, true)
   }
 

@@ -51,6 +51,7 @@ export default function PayslipBuilder() {
   const [overtimeHrs,  setOvertimeHrs]  = useState(0)
   const [overtimeMult, setOvertimeMult] = useState(1.5)
   const [actualHours,  setActualHours]  = useState(0)
+  const [taxDisplay,   setTaxDisplay]   = useState<'separate' | 'combined'>('separate')
 
   // Step 2b — Pay date auto-calc
   const [autoDate,      setAutoDate]      = useState(false)
@@ -229,6 +230,7 @@ export default function PayslipBuilder() {
       notes,
       template,
       logoDataURL:  selectedCompany.logo_url,
+      taxDisplay,
       ytdPrev: {
         gross:  ytdGross,
         vac:    ytdVac,
@@ -508,6 +510,22 @@ export default function PayslipBuilder() {
               )}
             </div>
 
+            {/* Tax Display */}
+            <div>
+              <label className="label">Tax Display on Payslip</label>
+              <div className="flex gap-3">
+                {(['separate', 'combined'] as const).map(t => (
+                  <label key={t} className={clsx(
+                    'flex items-center gap-2 px-4 py-2.5 rounded-lg border cursor-pointer text-sm font-medium transition-colors flex-1',
+                    taxDisplay === t ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-300 text-gray-600 hover:border-brand-300'
+                  )}>
+                    <input type="radio" className="sr-only" checked={taxDisplay === t} onChange={() => setTaxDisplay(t)} />
+                    {t === 'separate' ? 'Federal & Provincial separate' : 'Combined as "Income Tax"'}
+                  </label>
+                ))}
+              </div>
+            </div>
+
             {/* Overtime (hourly only) */}
             {selectedEmployee?.emp_type === 'hourly' && (
               <div className="grid grid-cols-3 gap-4">
@@ -739,8 +757,14 @@ export default function PayslipBuilder() {
                   {row('CPP', result.cpp1, ytd.cpp1)}
                   {result.cpp2 > 0 && row('CPP2', result.cpp2, ytd.cpp2)}
                   {row('EI', result.eiEmployee, ytd.ei)}
-                  {row('Federal Tax', result.fedTax, ytd.fed)}
-                  {row(`Provincial Tax (${selectedCompany.province})`, result.provTax, ytd.prov)}
+                  {taxDisplay === 'separate' ? (
+                    <>
+                      {row('Federal Tax', result.fedTax, ytd.fed)}
+                      {row(`Provincial Tax (${selectedCompany.province})`, result.provTax, ytd.prov)}
+                    </>
+                  ) : (
+                    row('Income Tax', result.fedTax + result.provTax, ytd.fed + ytd.prov)
+                  )}
                   {row('Total Statutory Deductions', result.totalDeductions, ytd.statutory, true)}
                   {result.customDeductLines.length > 0 && head('Other Deductions')}
                   {result.customDeductLines.map((d) => row(d.label, d.amount, allZero ? d.amount * pSoFar : d.amount))}
@@ -778,8 +802,12 @@ export default function PayslipBuilder() {
                   {[
                     ['CPP / CPP2', result.cpp1+result.cpp2, result.employerCPP, (result.cpp1+result.cpp2)+result.employerCPP],
                     ['EI',         result.eiEmployee,        result.eiEmployer,  result.eiEmployee+result.eiEmployer],
-                    ['Federal Tax',result.fedTax,            0,                  result.fedTax],
-                    ['Provincial Tax', result.provTax,       0,                  result.provTax],
+                    ...(taxDisplay === 'separate' ? [
+                      ['Federal Tax',result.fedTax,            0,                  result.fedTax],
+                      ['Provincial Tax', result.provTax,       0,                  result.provTax],
+                    ] : [
+                      ['Income Tax', result.fedTax + result.provTax, 0, result.fedTax + result.provTax],
+                    ]),
                   ].map(([label, emp, empr, total]) => (
                     <tr key={label as string}>
                       <td className="px-4 py-2">{label}</td>
@@ -814,6 +842,7 @@ export default function PayslipBuilder() {
                 periodStart, periodEnd, payDate, payMethod,
                 chequeNumber: chequeNum, chequeDate, vacType, vacRate,
                 overtimeMult, notes, template, logoDataURL: selectedCompany.logo_url,
+                taxDisplay,
                 ytdPrev: {
                   gross:  ytdGross,
                   vac:    ytdVac,

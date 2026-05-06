@@ -33,6 +33,7 @@ export interface PayslipPDFOptions {
   template:     number
   logoDataURL:  string | null
   ytdPrev:      { gross: number; vac: number; cpp1: number; cpp2: number; ei: number; fed: number; prov: number; custom: number; net: number }
+  taxDisplay:   'separate' | 'combined'
 }
 
 function fmtDateDisplay(str: string): string {
@@ -192,8 +193,12 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   tableRow('CPP', result.cpp1, opts.ytdPrev.cpp1, false)
   if (result.cpp2 > 0) tableRow('CPP2', result.cpp2, opts.ytdPrev.cpp2, false)
   tableRow('EI', result.eiEmployee, opts.ytdPrev.ei, false)
-  tableRow('Federal Tax', result.fedTax, opts.ytdPrev.fed, false)
-  tableRow(`Provincial Tax (${company.province})`, result.provTax, opts.ytdPrev.prov, false)
+  if (opts.taxDisplay === 'separate') {
+    tableRow('Federal Tax', result.fedTax, opts.ytdPrev.fed, false)
+    tableRow(`Provincial Tax (${company.province})`, result.provTax, opts.ytdPrev.prov, false)
+  } else {
+    tableRow('Income Tax', result.fedTax + result.provTax, opts.ytdPrev.fed + opts.ytdPrev.prov, false)
+  }
   tableRow('Total Statutory Deductions', result.totalDeductions, opts.ytdPrev.cpp1 + opts.ytdPrev.cpp2 + opts.ytdPrev.ei + opts.ytdPrev.fed + opts.ytdPrev.prov, true, T.rowHL)
 
   if (result.customDeductLines.length > 0) {
@@ -392,8 +397,12 @@ function generateQuickBooksStyle(opts: PayslipPDFOptions): Blob {
     ['CPP', result.cpp1],
     ...(result.cpp2 > 0 ? [['CPP2', result.cpp2] as [string,number]] : []),
     ['EI', result.eiEmployee],
-    ['Federal Tax', result.fedTax],
-    [`Provincial Tax (${company.province})`, result.provTax],
+    ...(opts.taxDisplay === 'separate' ? [
+      ['Federal Tax', result.fedTax] as [string,number],
+      [`Provincial Tax (${company.province})`, result.provTax] as [string,number],
+    ] : [
+      ['Income Tax', result.fedTax + result.provTax] as [string,number],
+    ]),
     ...result.customDeductLines.map(d => [d.label, d.amount] as [string,number]),
   ]
 
@@ -589,8 +598,12 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
   tableRow('CPP', result.cpp1, opts.ytdPrev.cpp1)
   if (result.cpp2 > 0) tableRow('CPP2', result.cpp2, opts.ytdPrev.cpp2)
   tableRow('EI', result.eiEmployee, opts.ytdPrev.ei)
-  tableRow('Federal Tax', result.fedTax, opts.ytdPrev.fed)
-  tableRow(`Provincial Tax (${company.province})`, result.provTax, opts.ytdPrev.prov)
+  if (opts.taxDisplay === 'separate') {
+    tableRow('Federal Tax', result.fedTax, opts.ytdPrev.fed)
+    tableRow(`Provincial Tax (${company.province})`, result.provTax, opts.ytdPrev.prov)
+  } else {
+    tableRow('Income Tax', result.fedTax + result.provTax, opts.ytdPrev.fed + opts.ytdPrev.prov)
+  }
   tableRow('Total Statutory Deductions', result.totalDeductions, opts.ytdPrev.cpp1 + opts.ytdPrev.cpp2 + opts.ytdPrev.ei + opts.ytdPrev.fed + opts.ytdPrev.prov, true)
 
   if (result.customDeductLines.length > 0) {

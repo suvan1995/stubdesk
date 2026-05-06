@@ -229,6 +229,17 @@ export default function PayslipBuilder() {
       notes,
       template,
       logoDataURL:  selectedCompany.logo_url,
+      ytdPrev: {
+        gross:  ytdGross,
+        vac:    ytdVac,
+        cpp1:   ytdCpp1,
+        cpp2:   ytdCpp2,
+        ei:     ytdEi,
+        fed:    ytdFed,
+        prov:   ytdProv,
+        custom: ytdCustom,
+        net:    ytdNet,
+      },
     })
 
     // 2. Upload to Supabase Storage
@@ -803,6 +814,17 @@ export default function PayslipBuilder() {
                 periodStart, periodEnd, payDate, payMethod,
                 chequeNumber: chequeNum, chequeDate, vacType, vacRate,
                 overtimeMult, notes, template, logoDataURL: selectedCompany.logo_url,
+                ytdPrev: {
+                  gross:  ytdGross,
+                  vac:    ytdVac,
+                  cpp1:   ytdCpp1,
+                  cpp2:   ytdCpp2,
+                  ei:     ytdEi,
+                  fed:    ytdFed,
+                  prov:   ytdProv,
+                  custom: ytdCustom,
+                  net:    ytdNet,
+                },
               })
               const url = URL.createObjectURL(blob)
               const a   = document.createElement('a')

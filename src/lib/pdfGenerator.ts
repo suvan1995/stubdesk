@@ -32,6 +32,7 @@ export interface PayslipPDFOptions {
   notes:        string
   template:     number
   logoDataURL:  string | null
+  ytdPrev:      { gross: number; vac: number; cpp1: number; cpp2: number; ei: number; fed: number; prov: number; custom: number; net: number }
 }
 
 function fmtDateDisplay(str: string): string {
@@ -175,30 +176,30 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
 
   // Earnings
   sectionHead('Earnings')
-  tableRow('Regular Pay', result.regularPay, result.regularPay, false)
-  if (result.otPay > 0) tableRow(`Overtime Pay (${opts.overtimeMult}×)`, result.otPay, result.otPay, false)
-  result.extraLines.forEach(e => tableRow(e.label, e.amount, e.amount, false))
+  tableRow('Regular Pay', result.regularPay, opts.ytdPrev.gross - opts.ytdPrev.vac, false)
+  if (result.otPay > 0) tableRow(`Overtime Pay (${opts.overtimeMult}×)`, result.otPay, 0, false)
+  result.extraLines.forEach(e => tableRow(e.label, e.amount, 0, false))
   // Always show vacation pay line, even when included
   if (opts.vacType === 'included') {
     tableRow(`Vacation Pay (${opts.vacRate}% - included in rate)`, 0, 0, false)
   } else if (result.vacPay > 0) {
-    tableRow(`Vacation Pay (${opts.vacRate}%)`, result.vacPay, result.vacPay, false)
+    tableRow(`Vacation Pay (${opts.vacRate}%)`, result.vacPay, opts.ytdPrev.vac, false)
   }
-  tableRow('Gross Pay', result.totalGross, result.totalGross, true, T.rowHL)
+  tableRow('Gross Pay', result.totalGross, opts.ytdPrev.gross, true, T.rowHL)
 
   // Deductions
   sectionHead('Statutory Deductions')
-  tableRow('CPP', result.cpp1, result.cpp1, false)
-  if (result.cpp2 > 0) tableRow('CPP2', result.cpp2, result.cpp2, false)
-  tableRow('EI', result.eiEmployee, result.eiEmployee, false)
-  tableRow('Federal Tax', result.fedTax, result.fedTax, false)
-  tableRow(`Provincial Tax (${company.province})`, result.provTax, result.provTax, false)
-  tableRow('Total Statutory Deductions', result.totalDeductions, result.totalDeductions, true, T.rowHL)
+  tableRow('CPP', result.cpp1, opts.ytdPrev.cpp1, false)
+  if (result.cpp2 > 0) tableRow('CPP2', result.cpp2, opts.ytdPrev.cpp2, false)
+  tableRow('EI', result.eiEmployee, opts.ytdPrev.ei, false)
+  tableRow('Federal Tax', result.fedTax, opts.ytdPrev.fed, false)
+  tableRow(`Provincial Tax (${company.province})`, result.provTax, opts.ytdPrev.prov, false)
+  tableRow('Total Statutory Deductions', result.totalDeductions, opts.ytdPrev.cpp1 + opts.ytdPrev.cpp2 + opts.ytdPrev.ei + opts.ytdPrev.fed + opts.ytdPrev.prov, true, T.rowHL)
 
   if (result.customDeductLines.length > 0) {
     sectionHead('Other Deductions')
-    result.customDeductLines.forEach(d => tableRow(d.label, d.amount, d.amount, false))
-    tableRow('Total Other Deductions', result.customDeductTotal, result.customDeductTotal, true, T.rowHL)
+    result.customDeductLines.forEach(d => tableRow(d.label, d.amount, 0, false))
+    tableRow('Total Other Deductions', result.customDeductTotal, opts.ytdPrev.custom, true, T.rowHL)
   }
 
   // Table border
@@ -572,30 +573,30 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
 
   // Earnings
   sectionHead('Earnings')
-  tableRow('Regular Pay', result.regularPay, result.regularPay)
-  if (result.otPay > 0) tableRow(`Overtime Pay (${opts.overtimeMult}×)`, result.otPay, result.otPay)
-  result.extraLines.forEach(e => tableRow(e.label, e.amount, e.amount))
+  tableRow('Regular Pay', result.regularPay, opts.ytdPrev.gross - opts.ytdPrev.vac)
+  if (result.otPay > 0) tableRow(`Overtime Pay (${opts.overtimeMult}×)`, result.otPay, 0)
+  result.extraLines.forEach(e => tableRow(e.label, e.amount, 0))
   // Always show vacation pay line, even when included
   if (opts.vacType === 'included') {
     tableRow(`Vacation Pay (${opts.vacRate}% - included in rate)`, 0, 0)
   } else if (result.vacPay > 0) {
-    tableRow(`Vacation Pay (${opts.vacRate}%)`, result.vacPay, result.vacPay)
+    tableRow(`Vacation Pay (${opts.vacRate}%)`, result.vacPay, opts.ytdPrev.vac)
   }
-  tableRow('Gross Pay', result.totalGross, result.totalGross, true)
+  tableRow('Gross Pay', result.totalGross, opts.ytdPrev.gross, true)
 
   // Deductions
   sectionHead('Statutory Deductions')
-  tableRow('CPP', result.cpp1, result.cpp1)
-  if (result.cpp2 > 0) tableRow('CPP2', result.cpp2, result.cpp2)
-  tableRow('EI', result.eiEmployee, result.eiEmployee)
-  tableRow('Federal Tax', result.fedTax, result.fedTax)
-  tableRow(`Provincial Tax (${company.province})`, result.provTax, result.provTax)
-  tableRow('Total Statutory Deductions', result.totalDeductions, result.totalDeductions, true)
+  tableRow('CPP', result.cpp1, opts.ytdPrev.cpp1)
+  if (result.cpp2 > 0) tableRow('CPP2', result.cpp2, opts.ytdPrev.cpp2)
+  tableRow('EI', result.eiEmployee, opts.ytdPrev.ei)
+  tableRow('Federal Tax', result.fedTax, opts.ytdPrev.fed)
+  tableRow(`Provincial Tax (${company.province})`, result.provTax, opts.ytdPrev.prov)
+  tableRow('Total Statutory Deductions', result.totalDeductions, opts.ytdPrev.cpp1 + opts.ytdPrev.cpp2 + opts.ytdPrev.ei + opts.ytdPrev.fed + opts.ytdPrev.prov, true)
 
   if (result.customDeductLines.length > 0) {
     sectionHead('Other Deductions')
-    result.customDeductLines.forEach(d => tableRow(d.label, d.amount, d.amount))
-    tableRow('Total Other Deductions', result.customDeductTotal, result.customDeductTotal, true)
+    result.customDeductLines.forEach(d => tableRow(d.label, d.amount, 0))
+    tableRow('Total Other Deductions', result.customDeductTotal, opts.ytdPrev.custom, true)
   }
 
   // Outer table border

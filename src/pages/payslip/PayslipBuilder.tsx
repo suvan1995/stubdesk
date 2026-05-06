@@ -75,6 +75,7 @@ export default function PayslipBuilder() {
   const [ytdProv,   setYtdProv]   = useState(0)
   const [ytdCustom, setYtdCustom] = useState(0)
   const [ytdNet,    setYtdNet]    = useState(0)
+  const [ytdTaxMode, setYtdTaxMode] = useState<'separate' | 'combined'>('separate')
 
   useEffect(() => {
     fetchCompanies()
@@ -213,6 +214,19 @@ export default function PayslipBuilder() {
     if (!result || !selectedCompany || !selectedEmployee || !profile) return
     setSaving(true)
 
+    // Split combined tax YTD if needed
+    let ytdFedToUse = ytdFed
+    let ytdProvToUse = ytdProv
+    if (ytdTaxMode === 'combined' && ytdFed > 0) {
+      // Split based on current period's ratio
+      const totalCurrentTax = result.fedTax + result.provTax
+      if (totalCurrentTax > 0) {
+        const fedRatio = result.fedTax / totalCurrentTax
+        ytdFedToUse = ytdFed * fedRatio
+        ytdProvToUse = ytdFed * (1 - fedRatio)
+      }
+    }
+
     // 1. Generate PDF blob
     const pdfBlob = generatePayslipPDF({
       result,
@@ -237,8 +251,8 @@ export default function PayslipBuilder() {
         cpp1:   ytdCpp1,
         cpp2:   ytdCpp2,
         ei:     ytdEi,
-        fed:    ytdFed,
-        prov:   ytdProv,
+        fed:    ytdFedToUse,
+        prov:   ytdProvToUse,
         custom: ytdCustom,
         net:    ytdNet,
       },
@@ -622,12 +636,38 @@ export default function PayslipBuilder() {
                 ↺ Reset
               </button>
             </div>
-            <p className="text-xs text-gray-400 mb-4">
+            <p className="text-xs text-gray-400 mb-3">
               Auto-filled from saved payslips for prior periods this year. The period number is detected
               by backtracking from today using the employee's pay frequency
               {selectedEmployee?.start_date ? ` and employment start date (${fmtDisplay(selectedEmployee.start_date)})` : ''}.
               Edit any field manually if needed.
             </p>
+
+            {/* YTD Tax Input Mode Toggle */}
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <label className="text-xs font-semibold text-gray-600 mb-2 block">Tax Input Mode</label>
+              <div className="flex gap-2">
+                {(['separate', 'combined'] as const).map(mode => (
+                  <label key={mode} className={clsx(
+                    'flex items-center gap-2 px-3 py-1.5 rounded-md border cursor-pointer text-xs font-medium transition-colors',
+                    ytdTaxMode === mode ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-300 text-gray-600 hover:border-brand-300'
+                  )}>
+                    <input type="radio" className="sr-only" checked={ytdTaxMode === mode} 
+                      onChange={() => {
+                        setYtdTaxMode(mode)
+                        if (mode === 'combined') {
+                          // When switching to combined, sum fed+prov into fed and clear prov
+                          const total = ytdFed + ytdProv
+                          setYtdFed(total)
+                          setYtdProv(0)
+                        }
+                      }} />
+                    {mode === 'separate' ? 'Federal & Provincial separate' : 'Combined as Income Tax'}
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-3 gap-3">
               {[
                 { label: 'YTD Gross Pay',         val: ytdGross,  set: setYtdGross  },
@@ -635,8 +675,12 @@ export default function PayslipBuilder() {
                 { label: 'YTD CPP',                val: ytdCpp1,   set: setYtdCpp1   },
                 { label: 'YTD CPP2',               val: ytdCpp2,   set: setYtdCpp2   },
                 { label: 'YTD EI',                 val: ytdEi,     set: setYtdEi     },
-                { label: 'YTD Federal Tax',        val: ytdFed,    set: setYtdFed    },
-                { label: 'YTD Provincial Tax',     val: ytdProv,   set: setYtdProv   },
+                ...(ytdTaxMode === 'separate' ? [
+                  { label: 'YTD Federal Tax',        val: ytdFed,    set: setYtdFed    },
+                  { label: 'YTD Provincial Tax',     val: ytdProv,   set: setYtdProv   },
+                ] : [
+                  { label: 'YTD Income Tax',         val: ytdFed,    set: setYtdFed    },
+                ]),
                 { label: 'YTD Custom Deductions',  val: ytdCustom, set: setYtdCustom },
                 { label: 'YTD Net Pay',            val: ytdNet,    set: setYtdNet    },
               ].map(f => (
@@ -692,6 +736,18 @@ export default function PayslipBuilder() {
 
           {/* Full YTD earnings/deductions table */}
           {(() => {
+            // Split combined tax YTD if needed for display
+            let ytdFedDisplay = ytdFed
+            let ytdProvDisplay = ytdProv
+            if (ytdTaxMode === 'combined' && ytdFed > 0) {
+              const totalCurrentTax = result.fedTax + result.provTax
+              if (totalCurrentTax > 0) {
+                const fedRatio = result.fedTax / totalCurrentTax
+                ytdFedDisplay = ytdFed * fedRatio
+                ytdProvDisplay = ytdFed * (1 - fedRatio)
+              }
+            }
+
             const allZero = !ytdGross && !ytdVac && !ytdCpp1 && !ytdCpp2 && !ytdEi && !ytdFed && !ytdProv && !ytdCustom && !ytdNet
             const pSoFar  = periodNumber > 0 ? periodNumber : 1
             const ytd = allZero ? {
@@ -715,11 +771,11 @@ export default function PayslipBuilder() {
               cpp1:    ytdCpp1   + result.cpp1,
               cpp2:    ytdCpp2   + result.cpp2,
               ei:      ytdEi     + result.eiEmployee,
-              fed:     ytdFed    + result.fedTax,
-              prov:    ytdProv   + result.provTax,
+              fed:     ytdFedDisplay    + result.fedTax,
+              prov:    ytdProvDisplay   + result.provTax,
               custom:  ytdCustom + result.customDeductTotal,
               net:     ytdNet    + result.netPay,
-              statutory: (ytdCpp1+ytdCpp2+ytdEi+ytdFed+ytdProv) + (result.cpp1+result.cpp2+result.eiEmployee+result.fedTax+result.provTax),
+              statutory: (ytdCpp1+ytdCpp2+ytdEi+ytdFedDisplay+ytdProvDisplay) + (result.cpp1+result.cpp2+result.eiEmployee+result.fedTax+result.provTax),
             }
             const row = (label: string, period: number, ytdVal: number | null, bold = false, green = false) => (
               <tr key={label} className={bold ? 'bg-gray-50 font-semibold' : ''}>
@@ -837,6 +893,19 @@ export default function PayslipBuilder() {
             </button>
             <button className="btn-secondary" onClick={() => {
               if (!result || !selectedCompany || !selectedEmployee) return
+              
+              // Split combined tax YTD if needed
+              let ytdFedToUse = ytdFed
+              let ytdProvToUse = ytdProv
+              if (ytdTaxMode === 'combined' && ytdFed > 0) {
+                const totalCurrentTax = result.fedTax + result.provTax
+                if (totalCurrentTax > 0) {
+                  const fedRatio = result.fedTax / totalCurrentTax
+                  ytdFedToUse = ytdFed * fedRatio
+                  ytdProvToUse = ytdFed * (1 - fedRatio)
+                }
+              }
+              
               const blob = generatePayslipPDF({
                 result, company: selectedCompany, employee: selectedEmployee,
                 periodStart, periodEnd, payDate, payMethod,
@@ -849,8 +918,8 @@ export default function PayslipBuilder() {
                   cpp1:   ytdCpp1,
                   cpp2:   ytdCpp2,
                   ei:     ytdEi,
-                  fed:    ytdFed,
-                  prov:   ytdProv,
+                  fed:    ytdFedToUse,
+                  prov:   ytdProvToUse,
                   custom: ytdCustom,
                   net:    ytdNet,
                 },

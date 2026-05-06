@@ -13,6 +13,11 @@ function C(): TaxConstants { return _liveConstants }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// Round to 2 decimal places to avoid floating-point precision issues
+function round2(n: number): number {
+  return Math.round(n * 100) / 100
+}
+
 function calcBracketTax(income: number, brackets: TaxBracket[]): number {
   let tax = 0
   for (const b of brackets) {
@@ -61,17 +66,17 @@ export function calcCPP(periodGross: number, ytdGrossPrior: number, periods = 26
   const cpp2 = Math.min(thisCPP2Contributory * C().CPP2_RATE, C().CPP2_MAX_EMPLOYEE - priorCPP2Paid)
 
   return {
-    cpp1: Math.max(0, cpp1),
-    cpp2: Math.max(0, cpp2),
-    total: Math.max(0, cpp1) + Math.max(0, cpp2),
+    cpp1: Math.max(0, round2(cpp1)),
+    cpp2: Math.max(0, round2(cpp2)),
+    total: Math.max(0, round2(cpp1)) + Math.max(0, round2(cpp2)),
   }
 }
 
 export function calcEI(periodGross: number, periods: number) {
   const maxPeriod = C().EI_MAX_EMPLOYEE / periods
   const insurable = Math.min(periodGross, C().EI_MAX_INSURABLE / periods)
-  const employee  = Math.min(insurable * C().EI_EMPLOYEE_RATE, maxPeriod)
-  return { employee, employer: employee * C().EI_EMPLOYER_MULT }
+  const employee  = round2(Math.min(insurable * C().EI_EMPLOYEE_RATE, maxPeriod))
+  return { employee, employer: round2(employee * C().EI_EMPLOYER_MULT) }
 }
 
 export function calcFederalTax(annualGross: number, annualCPP: number, annualEI: number): number {
@@ -114,21 +119,21 @@ export function calculatePayslip(inputs: PayslipInputs): PayslipResult {
   let regularPay = 0, otPay = 0
 
   if (empType === 'salaried') {
-    regularPay = annualSalary / periods
+    regularPay = round2(annualSalary / periods)
   } else {
     const stdHoursPerPeriod = stdWeeklyHours * (52 / periods)
     const regHours = actualHours > 0
       ? Math.max(0, actualHours - (overtimeHours || 0))
       : stdHoursPerPeriod
-    regularPay = regHours * hourlyRate
-    otPay      = (overtimeHours || 0) * hourlyRate * (overtimeMultiplier || 1.5)
+    regularPay = round2(regHours * hourlyRate)
+    otPay      = round2((overtimeHours || 0) * hourlyRate * (overtimeMultiplier || 1.5))
   }
 
   const extraLines = extraEarnings.filter(e => e.amount > 0)
-  const extraTotal = extraLines.reduce((s, e) => s + e.amount, 0)
-  const baseGross  = regularPay + otPay + extraTotal
-  const vacPay     = vacType === 'accruing' ? baseGross * (vacRate / 100) : 0
-  const totalGross = baseGross + vacPay
+  const extraTotal = round2(extraLines.reduce((s, e) => s + e.amount, 0))
+  const baseGross  = round2(regularPay + otPay + extraTotal)
+  const vacPay     = vacType === 'accruing' ? round2(baseGross * (vacRate / 100)) : 0
+  const totalGross = round2(baseGross + vacPay)
 
   const ytdGrossPrior = ytdPrev?.gross ?? 0
   const cpp = calcCPP(totalGross, ytdGrossPrior, periods)
@@ -138,24 +143,24 @@ export function calculatePayslip(inputs: PayslipInputs): PayslipResult {
   const annualCPP    = cpp.total  * periods
   const annualEI     = ei.employee * periods
 
-  const periodFedTax  = calcFederalTax(annualGross, annualCPP, annualEI) / periods
-  const periodProvTax = calcProvincialTax(annualGross, annualCPP, annualEI, province) / periods
+  const periodFedTax  = round2(calcFederalTax(annualGross, annualCPP, annualEI) / periods)
+  const periodProvTax = round2(calcProvincialTax(annualGross, annualCPP, annualEI, province) / periods)
 
-  const totalDeductions = cpp.cpp1 + cpp.cpp2 + ei.employee + periodFedTax + periodProvTax
+  const totalDeductions = round2(cpp.cpp1 + cpp.cpp2 + ei.employee + periodFedTax + periodProvTax)
 
   const customDeductLines = customDeductions.filter(d => d.amount > 0)
-  const customDeductTotal = customDeductLines.reduce((s, d) => s + d.amount, 0)
+  const customDeductTotal = round2(customDeductLines.reduce((s, d) => s + d.amount, 0))
 
-  const netPay         = totalGross - totalDeductions - customDeductTotal
-  const employerCPP    = cpp.cpp1 + cpp.cpp2
-  const employerEI     = ei.employer
-  const totalEmployerCost = totalGross + employerCPP + employerEI
+  const netPay         = round2(totalGross - totalDeductions - customDeductTotal)
+  const employerCPP    = round2(cpp.cpp1 + cpp.cpp2)
+  const employerEI     = round2(ei.employer)
+  const totalEmployerCost = round2(totalGross + employerCPP + employerEI)
 
   return {
     regularPay, otPay, extraLines, extraTotal,
     baseGross, vacPay, totalGross,
-    cpp1: cpp.cpp1, cpp2: cpp.cpp2, totalCPP: cpp.total,
-    eiEmployee: ei.employee, eiEmployer: ei.employer,
+    cpp1: round2(cpp.cpp1), cpp2: round2(cpp.cpp2), totalCPP: round2(cpp.total),
+    eiEmployee: round2(ei.employee), eiEmployer: employerEI,
     fedTax: periodFedTax, provTax: periodProvTax,
     totalDeductions, customDeductLines, customDeductTotal, netPay,
     employerCPP, employerEI, totalEmployerCost,

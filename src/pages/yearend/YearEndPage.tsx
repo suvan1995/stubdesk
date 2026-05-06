@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useCompanyStore } from '@/store/companyStore'
 import { useLimitsStore } from '@/store/limitsStore'
+import CRAFormLinks from '@/components/ui/CRAFormLinks'
 import clsx from 'clsx'
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -168,6 +169,16 @@ export default function YearEndPage() {
                 </button>
               )}
             </div>
+          </div>
+        ))}
+      </div>
+
+      {/* CRA filing links */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {(['T4','T4A','T5'] as const).map(key => (
+          <div key={key} className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="font-bold text-gray-700 text-sm mb-2">{key} — Official CRA Form</div>
+            <CRAFormLinks formKey={key} compact />
           </div>
         ))}
       </div>

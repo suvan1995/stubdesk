@@ -6,6 +6,7 @@ import { useCompanyStore } from '@/store/companyStore'
 import { aggregateT4FromPayslips } from '@/lib/t4Engine'
 import { Card, CardTitle } from '@/components/ui/Card'
 import Select from '@/components/ui/Select'
+import CRAFormLinks from '@/components/ui/CRAFormLinks'
 import type { T4Slip, Payslip } from '@/types/database'
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -127,6 +128,8 @@ export default function T4EditPage() {
         <button className="btn-ghost text-sm" onClick={() => navigate('/t4')}>← Back</button>
         <h1>{isNew ? 'New T4 Slip' : 'Edit T4 Slip'}</h1>
       </div>
+
+      <CRAFormLinks formKey="T4" />
 
       {/* Employee selection */}
       <Card>

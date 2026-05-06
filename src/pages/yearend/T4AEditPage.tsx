@@ -8,6 +8,7 @@ import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import type { T4ASlip } from '@/types/database'
 import { generateT4APDF } from '@/lib/yearEndPdfGenerator'
+import CRAFormLinks from '@/components/ui/CRAFormLinks'
 
 const CURRENT_YEAR = new Date().getFullYear()
 const YEARS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i)
@@ -79,6 +80,8 @@ export default function T4AEditPage() {
       <div className="bg-purple-50 border border-purple-200 rounded-xl px-5 py-3 text-xs text-purple-800">
         <strong>T4A</strong> — Use for self-employed contractors, freelancers, pension income, RRSP payments, retiring allowances, and fees for services. Box 048 (Fees for services) is the most common for contractors.
       </div>
+
+      <CRAFormLinks formKey="T4A" />
 
       <Card>
         <CardTitle>Payer &amp; Recipient</CardTitle>

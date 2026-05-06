@@ -7,6 +7,7 @@ import { fmtDisplay } from '@/lib/dateUtils'
 import { ROE_REASON_CODES, PAY_PERIOD_TYPE_LABELS } from '@/types/database'
 import type { ROE } from '@/types/database'
 import { generateROEPDF } from '@/lib/roePdfGenerator'
+import CRAFormLinks from '@/components/ui/CRAFormLinks'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import { Card, CardTitle } from '@/components/ui/Card'
@@ -152,6 +153,8 @@ export default function ROEEditPage() {
           Service Canada My Account
         </a>. Block numbers correspond to the official CRA ROE form (ROE Web).
       </div>
+
+      <CRAFormLinks formKey="ROE" />
 
       {/* Employer & Employee */}
       <Card>

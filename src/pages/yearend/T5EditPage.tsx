@@ -8,6 +8,7 @@ import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import type { T5Slip } from '@/types/database'
 import { generateT5PDF } from '@/lib/yearEndPdfGenerator'
+import CRAFormLinks from '@/components/ui/CRAFormLinks'
 
 const CURRENT_YEAR = new Date().getFullYear()
 const YEARS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i)
@@ -95,6 +96,8 @@ export default function T5EditPage() {
       <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-3 text-xs text-green-800">
         <strong>T5</strong> — For dividends, interest, and investment income. Taxable amounts and dividend tax credits are calculated automatically when you enter the dividend amounts.
       </div>
+
+      <CRAFormLinks formKey="T5" />
 
       <Card>
         <CardTitle>Payer &amp; Recipient</CardTitle>

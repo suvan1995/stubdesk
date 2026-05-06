@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
+import { recordLoginAttempt, isLoginLocked } from '@/lib/security'
 import Input from '@/components/ui/Input'
 
 export default function LoginPage() {
@@ -19,10 +20,29 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+
+    // Client-side rate limit check
+    const lock = isLoginLocked()
+    if (lock.locked) {
+      setError(`Too many failed attempts. Try again in ${Math.ceil((lock.unlockIn ?? 900) / 60)} minutes.`)
+      return
+    }
+
     setLoading(true)
     const { error } = await signIn(email, password)
     setLoading(false)
-    if (error) { setError(error); return }
+
+    if (error) {
+      const status = recordLoginAttempt(false)
+      if (status.locked) {
+        setError('Too many failed attempts. Account locked for 15 minutes.')
+      } else {
+        setError(`${error}${status.remaining < 3 ? ` (${status.remaining} attempt${status.remaining !== 1 ? 's' : ''} remaining)` : ''}`)
+      }
+      return
+    }
+
+    recordLoginAttempt(true)
     navigate(from, { replace: true })
   }
 

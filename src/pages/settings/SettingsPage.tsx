@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { supabase } from '@/lib/supabase'
 import { Card, CardTitle } from '@/components/ui/Card'
@@ -72,6 +73,29 @@ export default function SettingsPage() {
             {pwSaving ? 'Updating…' : 'Change Password'}
           </button>
         </form>
+      </Card>
+
+      {/* 2FA */}
+      <Card>
+        <CardTitle>Two-Factor Authentication</CardTitle>
+        <p className="text-sm text-gray-500 mb-4">
+          Add an extra layer of security. After enabling, you'll need your authenticator app every time you sign in.
+        </p>
+        <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3 mb-3">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">📱</span>
+            <div>
+              <div className="font-semibold text-sm text-gray-800">Authenticator App (TOTP)</div>
+              <div className="text-xs text-gray-400">Google Authenticator, Authy, 1Password, etc.</div>
+            </div>
+          </div>
+          <Link to="/mfa/enroll" className="btn-primary text-sm py-2">
+            Set Up 2FA
+          </Link>
+        </div>
+        <p className="text-xs text-gray-400">
+          After setup, you'll be asked for a 6-digit code from your app each time you log in.
+        </p>
       </Card>
 
       {/* Danger zone */}

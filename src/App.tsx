@@ -5,11 +5,14 @@ import { useAuthStore } from '@/store/authStore'
 import { useLimitsStore } from '@/store/limitsStore'
 import { useTaxStore } from '@/store/taxStore'
 import { setLiveTaxConstants } from '@/lib/payrollEngine'
+import { startActivityTracking, injectCSP } from '@/lib/security'
 
 // Pages — user app
 import LandingPage       from '@/pages/LandingPage'
 import LoginPage         from '@/pages/auth/LoginPage'
 import SignupPage        from '@/pages/auth/SignupPage'
+import MFAVerifyPage     from '@/pages/auth/mfa/MFAVerifyPage'
+import MFAEnrollPage     from '@/pages/auth/mfa/MFAEnrollPage'
 import DashboardPage     from '@/pages/dashboard/DashboardPage'
 import PayslipBuilder    from '@/pages/payslip/PayslipBuilder'
 import CompaniesPage     from '@/pages/companies/CompaniesPage'
@@ -49,6 +52,15 @@ export default function App() {
 
   // Keep engine in sync whenever DB constants change
   useEffect(() => { setLiveTaxConstants(constants) }, [constants])
+
+  // Inject CSP and start session timeout tracking
+  useEffect(() => {
+    injectCSP()
+    const cleanup = startActivityTracking(async () => {
+      await useAuthStore.getState().signOut()
+    })
+    return cleanup
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -98,12 +110,14 @@ export default function App() {
   return (
     <Routes>
       {/* Public */}
-      <Route path="/"       element={<LandingPage />} />
-      <Route path="/login"  element={<LoginPage />} />
-      <Route path="/signup" element={<SignupPage />} />
+      <Route path="/"           element={<LandingPage />} />
+      <Route path="/login"      element={<LoginPage />} />
+      <Route path="/signup"     element={<SignupPage />} />
+      <Route path="/mfa/verify" element={<MFAVerifyPage />} />
 
       {/* Protected — user app */}
       <Route element={<AuthGuard />}>
+        <Route path="/mfa/enroll" element={<MFAEnrollPage />} />
         <Route element={<AppLayout />}>
           <Route path="/dashboard"  element={<DashboardPage />} />
           <Route path="/companies"  element={<CompaniesPage />} />

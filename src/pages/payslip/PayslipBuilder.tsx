@@ -22,8 +22,8 @@ const FREQ_OPTIONS  = [
   { value: 24, label: 'Semi-Monthly (24/year)' },
   { value: 12, label: 'Monthly (12/year)' },
 ]
-const TEMPLATE_NAMES = ['Classic Blue', 'Modern Dark', 'Forest Green', 'Slate Minimal', 'Warm Burgundy']
-const TEMPLATE_COLORS = ['#1a5276', '#16213e', '#1b5e20', '#37474f', '#6a1b4d']
+const TEMPLATE_NAMES  = ['Classic Blue', 'Modern Dark', 'Forest Green', 'Slate Minimal', 'Warm Burgundy', 'QuickBooks Classic', 'Dayforce Corporate']
+const TEMPLATE_COLORS = ['#1a5276', '#16213e', '#1b5e20', '#37474f', '#6a1b4d', '#2b8254', '#0f2850']
 
 export default function PayslipBuilder() {
   const navigate = useNavigate()
@@ -619,7 +619,7 @@ export default function PayslipBuilder() {
           {/* Template */}
           <Card>
             <CardTitle>Payslip Template</CardTitle>
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-7 gap-2">
               {TEMPLATE_NAMES.map((name, i) => (
                 <button key={i} onClick={() => setTemplate(i + 1)}
                   className={clsx(

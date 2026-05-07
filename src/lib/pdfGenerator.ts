@@ -335,8 +335,8 @@ function generateQuickBooksStyle(opts: PayslipPDFOptions): Blob {
   const rule = (yy: number, c: [number,number,number] = lgray, lw = 0.3) => {
     doc.setDrawColor(...c); doc.setLineWidth(lw); doc.line(mg, yy, pageW-mg, yy)
   }
-  const bdr = (x: number, yy: number, w: number, h: number, c: [number,number,number] = lgray) => {
-    doc.setDrawColor(...c); doc.setLineWidth(0.3); doc.rect(x, yy, w, h)
+  const bdr = (x: number, yy: number, w: number, h: number, c: [number,number,number] = lgray, lw = 0.3) => {
+    doc.setDrawColor(...c); doc.setLineWidth(lw); doc.rect(x, yy, w, h)
   }
 
   // ── Logo + company name ──────────────────────────────────────────────────

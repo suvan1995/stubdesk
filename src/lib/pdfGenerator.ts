@@ -34,6 +34,7 @@ export interface PayslipPDFOptions {
   logoDataURL:  string | null
   ytdPrev:      { gross: number; vac: number; cpp1: number; cpp2: number; ei: number; fed: number; prov: number; custom: number; net: number }
   taxDisplay:   'separate' | 'combined'
+  colorMode:    'color' | 'bw'
 }
 
 function fmtDateDisplay(str: string): string {
@@ -68,6 +69,16 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   const gray   = [127,140,141]
   let y        = margin
 
+  // Apply black & white mode if selected
+  const primary = opts.colorMode === 'bw' ? [0,0,0] as number[] : T.primary
+  const netBg = opts.colorMode === 'bw' ? [0,0,0] as number[] : T.netBg
+  const sectionBg = opts.colorMode === 'bw' ? [245,245,245] as number[] : T.sectionBg
+  const rowHL = opts.colorMode === 'bw' ? [235,235,235] as number[] : T.rowHL
+  const border = opts.colorMode === 'bw' ? [180,180,180] as number[] : T.border
+  const headerText = T.headerText
+  const subText = opts.colorMode === 'bw' ? [150,150,150] as number[] : T.subText
+  const tableHeader = opts.colorMode === 'bw' ? [0,0,0] as number[] : T.tableHeader
+
   // ── helpers ──────────────────────────────────────────────────
   const sf = (style: string, size: number, color: number[] = black) => {
     doc.setFont('helvetica', style)
@@ -81,13 +92,13 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   const tx = (str: string, x: number, yy: number, opts?: object) =>
     doc.text(str || '', x, yy, opts)
   const hr = (yy: number) => {
-    doc.setDrawColor(...(T.border as [number,number,number]))
+    doc.setDrawColor(...(border as [number,number,number]))
     doc.setLineWidth(0.3)
     doc.line(margin, yy, pageW - margin, yy)
   }
 
   // ── HEADER ───────────────────────────────────────────────────
-  fr(0, 0, pageW, 28, T.primary)
+  fr(0, 0, pageW, 28, primary)
   let logoEndX = margin
   if (opts.logoDataURL) {
     try {
@@ -99,9 +110,9 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
       logoEndX = margin + 26
     } catch { /* skip bad logo */ }
   }
-  sf('bold', 15, T.headerText as number[])
+  sf('bold', 15, headerText as number[])
   tx(company.name, logoEndX, 11)
-  sf('normal', 8, T.subText as number[])
+  sf('normal', 8, subText as number[])
   tx([company.street, `${company.city}, ${company.province}  ${company.postal}`].join('  |  '), logoEndX, 17)
   if (company.cra_bn) tx(`CRA BN: ${company.cra_bn}`, logoEndX, 22)
   y = 33
@@ -121,8 +132,8 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   }
 
   const infoH = infoLines.length * 6 + 4
-  fr(margin, y, fullW, infoH, T.sectionBg)
-  doc.setDrawColor(...(T.border as [number,number,number]))
+  fr(margin, y, fullW, infoH, sectionBg)
+  doc.setDrawColor(...(border as [number,number,number]))
   doc.setLineWidth(0.3)
   doc.rect(margin, y, fullW, infoH)
 
@@ -141,8 +152,8 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   const rowH   = 6.5
 
   const sectionHead = (label: string) => {
-    fr(margin, y, fullW, 6, T.sectionBg)
-    doc.setDrawColor(...(T.border as [number,number,number])); doc.setLineWidth(0.2)
+    fr(margin, y, fullW, 6, sectionBg)
+    doc.setDrawColor(...(border as [number,number,number])); doc.setLineWidth(0.2)
     doc.rect(margin, y, fullW, 6)
     sf('bold', 7.5, gray as number[])
     tx(label.toUpperCase(), margin+3, y+4.3)
@@ -151,11 +162,11 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
 
   const tableRow = (label: string, period: number, ytd: number | null, bold: boolean, bg?: number[]) => {
     fr(margin, y, fullW, rowH, bg ?? white)
-    sf(bold ? 'bold' : 'normal', 8.5, bold ? T.primary as number[] : black)
+    sf(bold ? 'bold' : 'normal', 8.5, bold ? primary as number[] : black)
     tx(label, margin+3, y+4.5)
     tx(fmtCAD(period), margin+labelW+amtW-3, y+4.5, { align: 'right' })
     if (ytd !== null) {
-      sf(bold ? 'bold' : 'normal', 8.5, bold ? T.primary as number[] : [100,100,100])
+      sf(bold ? 'bold' : 'normal', 8.5, bold ? primary as number[] : [100,100,100])
       // YTD includes current period + prior periods
       const ytdTotal = ytd + period
       tx(fmtCAD(ytdTotal), margin+fullW-3, y+4.5, { align: 'right' })
@@ -167,7 +178,7 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   }
 
   // Column headers
-  fr(margin, y, fullW, 7, T.tableHeader)
+  fr(margin, y, fullW, 7, tableHeader)
   sf('bold', 8, white as number[])
   tx('DESCRIPTION', margin+3, y+5)
   tx('THIS PERIOD', margin+labelW+amtW-3, y+5, { align: 'right' })
@@ -186,7 +197,7 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   } else if (result.vacPay > 0) {
     tableRow(`Vacation Pay (${opts.vacRate}%)`, result.vacPay, opts.ytdPrev.vac, false)
   }
-  tableRow('Gross Pay', result.totalGross, opts.ytdPrev.gross + opts.ytdPrev.vac, true, T.rowHL)
+  tableRow('Gross Pay', result.totalGross, opts.ytdPrev.gross + opts.ytdPrev.vac, true, rowHL)
 
   // Deductions
   sectionHead('Statutory Deductions')
@@ -199,29 +210,29 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   } else {
     tableRow('Income Tax', result.fedTax + result.provTax, opts.ytdPrev.fed + opts.ytdPrev.prov, false)
   }
-  tableRow('Total Statutory Deductions', result.totalDeductions, opts.ytdPrev.cpp1 + opts.ytdPrev.cpp2 + opts.ytdPrev.ei + opts.ytdPrev.fed + opts.ytdPrev.prov, true, T.rowHL)
+  tableRow('Total Statutory Deductions', result.totalDeductions, opts.ytdPrev.cpp1 + opts.ytdPrev.cpp2 + opts.ytdPrev.ei + opts.ytdPrev.fed + opts.ytdPrev.prov, true, rowHL)
 
   if (result.customDeductLines.length > 0) {
     sectionHead('Other Deductions')
     result.customDeductLines.forEach(d => tableRow(d.label, d.amount, null, false))
-    tableRow('Total Other Deductions', result.customDeductTotal, opts.ytdPrev.custom, true, T.rowHL)
+    tableRow('Total Other Deductions', result.customDeductTotal, opts.ytdPrev.custom, true, rowHL)
   }
 
   // Table border
-  doc.setDrawColor(...(T.border as [number,number,number])); doc.setLineWidth(0.4)
+  doc.setDrawColor(...(border as [number,number,number])); doc.setLineWidth(0.4)
   doc.rect(margin, tableTop, fullW, y - tableTop)
   y += 3
 
   // ── NET PAY ───────────────────────────────────────────────────
-  fr(margin, y, fullW, 10, T.netBg)
+  fr(margin, y, fullW, 10, netBg)
   sf('bold', 12, white as number[])
   tx('NET PAY', margin+3, y+7)
   tx(fmtCAD(result.netPay), margin+labelW+amtW-3, y+7, { align: 'right' })
   y += 14
 
   // ── EMPLOYER CONTRIBUTIONS ────────────────────────────────────
-  fr(margin, y, fullW, 7, T.sectionBg)
-  doc.setDrawColor(...(T.border as [number,number,number]))
+  fr(margin, y, fullW, 7, sectionBg)
+  doc.setDrawColor(...(border as [number,number,number]))
   doc.rect(margin, y, fullW, 7)
   sf('bold', 8, gray as number[])
   tx('EMPLOYER CONTRIBUTIONS (not deducted from employee pay)', margin+3, y+5)
@@ -234,13 +245,13 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   ]
   empRows.forEach(([label, val], i) => {
     const isTot = i === empRows.length - 1
-    fr(margin, y, fullW, 6.5, isTot ? T.rowHL : (i%2===0 ? white : [248,249,250]))
+    fr(margin, y, fullW, 6.5, isTot ? rowHL : (i%2===0 ? white : [248,249,250]))
     sf(isTot ? 'bold' : 'normal', 8.5, black)
     tx(label, margin+3, y+4.5)
     tx(val, pageW-margin-3, y+4.5, { align: 'right' })
     y += 6.5
   })
-  doc.setDrawColor(...(T.border as [number,number,number]))
+  doc.setDrawColor(...(border as [number,number,number]))
   doc.rect(margin, y - 6.5*3, fullW, 6.5*3)
   y += 4
 
@@ -303,12 +314,15 @@ function generateQuickBooksStyle(opts: PayslipPDFOptions): Blob {
   const pageW = 215.9
   const mg    = 18          // margin
   const fw    = pageW - mg * 2
-  const black = [30, 30, 30]   as [number,number,number]
+  
+  // Color mode support
+  const black = opts.colorMode === 'bw' ? [0, 0, 0] as [number,number,number] : [30, 30, 30] as [number,number,number]
   const dgray = [80, 80, 80]   as [number,number,number]
   const mgray = [140,140,140]  as [number,number,number]
-  const lgray = [230,230,230]  as [number,number,number]
-  const green = [43, 130, 84]  as [number,number,number]
+  const lgray = opts.colorMode === 'bw' ? [200,200,200] as [number,number,number] : [230,230,230] as [number,number,number]
+  const green = opts.colorMode === 'bw' ? [0, 0, 0] as [number,number,number] : [43, 130, 84] as [number,number,number]
   const white = [255,255,255]  as [number,number,number]
+  const altbg = opts.colorMode === 'bw' ? [250,250,250] as [number,number,number] : [248,248,248] as [number,number,number]
   let y = mg
 
   const sf = (style: string, size: number, c: [number,number,number] = black) => {
@@ -343,7 +357,7 @@ function generateQuickBooksStyle(opts: PayslipPDFOptions): Blob {
   if (company.cra_bn) { sf('normal', 7, mgray); tx(`BN: ${company.cra_bn}`, pageW - mg, y + 8, { align: 'right' }) }
   y += 22
 
-  // ── Green accent rule ────────────────────────────────────────────────────
+  // ── Accent rule ────────────────────────────────────────────────────────
   fr(mg, y, fw, 1.5, green); y += 5
 
   // ── PAY STATEMENT title + period ─────────────────────────────────────────
@@ -375,63 +389,78 @@ function generateQuickBooksStyle(opts: PayslipPDFOptions): Blob {
   }
   y += 3; rule(y); y += 6
 
-  // ── Two-column earnings / deductions ─────────────────────────────────────
-  const col = fw / 2 - 4
-
-  // Column headers
-  sf('bold', 7.5, mgray); tx('EARNINGS', mg, y)
-  sf('bold', 7.5, mgray); tx('DEDUCTIONS', mg + fw/2 + 4, y)
-  y += 4; rule(y, lgray, 0.2); y += 4
-
-  // Build earnings rows
-  const earningsRows: [string, number][] = [
-    ['Regular Pay', result.regularPay],
-    ...(result.otPay > 0 ? [[`Overtime (${opts.overtimeMult}×)`, result.otPay] as [string,number]] : []),
-    ...result.extraLines.map(e => [e.label, e.amount] as [string,number]),
-    // Always show vacation pay line, even when included
-    ...(opts.vacType === 'included' ? [[`Vacation Pay (${opts.vacRate}% - included)`, 0] as [string,number]] : 
-        result.vacPay > 0 ? [[`Vacation Pay (${opts.vacRate}%)`, result.vacPay] as [string,number]] : []),
-  ]
-  // Build deductions rows
-  const deductRows: [string, number][] = [
-    ['CPP', result.cpp1],
-    ...(result.cpp2 > 0 ? [['CPP2', result.cpp2] as [string,number]] : []),
-    ['EI', result.eiEmployee],
-    ...(opts.taxDisplay === 'separate' ? [
-      ['Federal Tax', result.fedTax] as [string,number],
-      [`Provincial Tax (${company.province})`, result.provTax] as [string,number],
-    ] : [
-      ['Income Tax', result.fedTax + result.provTax] as [string,number],
-    ]),
-    ...result.customDeductLines.map(d => [d.label, d.amount] as [string,number]),
-  ]
-
-  const maxRows = Math.max(earningsRows.length, deductRows.length)
+  // ── Earnings & Deductions Table with YTD ─────────────────────────────────
+  const labelW = 70
+  const amtW = 30
+  const ytdW = 30
   const rowH = 6
-  for (let i = 0; i < maxRows; i++) {
-    if (i % 2 === 0) {
-      fr(mg, y - 1, col, rowH, [248,248,248] as [number,number,number])
-      fr(mg + fw/2 + 4, y - 1, col, rowH, [248,248,248] as [number,number,number])
-    }
-    if (earningsRows[i]) {
-      sf('normal', 8, dgray); tx(earningsRows[i][0], mg + 1, y + 3.5)
-      sf('normal', 8, black); tx(fmtCAD(earningsRows[i][1]), mg + col - 1, y + 3.5, { align: 'right' })
-    }
-    if (deductRows[i]) {
-      sf('normal', 8, dgray); tx(deductRows[i][0], mg + fw/2 + 5, y + 3.5)
-      sf('normal', 8, black); tx(fmtCAD(deductRows[i][1]), mg + fw - 1, y + 3.5, { align: 'right' })
+
+  const tableRow = (label: string, period: number, ytd: number | null, bold: boolean) => {
+    fr(mg, y, fw, rowH, bold ? lgray : (y % 12 < 6 ? white : altbg))
+    sf(bold ? 'bold' : 'normal', 8, bold ? black : dgray)
+    tx(label, mg + 2, y + 4)
+    sf(bold ? 'bold' : 'normal', 8, black)
+    tx(fmtCAD(period), mg + labelW + amtW - 2, y + 4, { align: 'right' })
+    if (ytd !== null) {
+      sf(bold ? 'bold' : 'normal', 8, mgray)
+      const ytdTotal = ytd + period
+      tx(fmtCAD(ytdTotal), mg + labelW + amtW + ytdW - 2, y + 4, { align: 'right' })
+    } else {
+      sf('normal', 8, [200,200,200] as [number,number,number])
+      tx('—', mg + labelW + amtW + ytdW - 2, y + 4, { align: 'right' })
     }
     y += rowH
   }
 
-  y += 2; rule(y, lgray, 0.2); y += 4
+  const sectionHead = (label: string) => {
+    fr(mg, y, fw, 6, opts.colorMode === 'bw' ? lgray : [235,240,245] as [number,number,number])
+    sf('bold', 7, opts.colorMode === 'bw' ? black : green)
+    tx(label.toUpperCase(), mg + 2, y + 4)
+    y += 6
+  }
 
-  // Subtotals
-  sf('bold', 8.5, black); tx('Gross Pay', mg + 1, y)
-  tx(fmtCAD(result.totalGross), mg + col - 1, y, { align: 'right' })
-  sf('bold', 8.5, black); tx('Total Deductions', mg + fw/2 + 5, y)
-  tx(fmtCAD(result.totalDeductions + result.customDeductTotal), mg + fw - 1, y, { align: 'right' })
-  y += 8; rule(y); y += 6
+  // Column headers
+  fr(mg, y, fw, 7, green)
+  sf('bold', 7.5, white)
+  tx('DESCRIPTION', mg + 2, y + 5)
+  tx('THIS PERIOD', mg + labelW + amtW - 2, y + 5, { align: 'right' })
+  tx('YEAR TO DATE', mg + labelW + amtW + ytdW - 2, y + 5, { align: 'right' })
+  y += 7
+
+  // Earnings
+  sectionHead('Earnings')
+  tableRow('Regular Pay', result.regularPay, opts.ytdPrev.gross, false)
+  if (result.otPay > 0) tableRow(`Overtime Pay (${opts.overtimeMult}×)`, result.otPay, null, false)
+  result.extraLines.forEach(e => tableRow(e.label, e.amount, null, false))
+  if (opts.vacType === 'included') {
+    tableRow(`Vacation Pay (${opts.vacRate}% - included in rate)`, 0, 0, false)
+  } else if (result.vacPay > 0) {
+    tableRow(`Vacation Pay (${opts.vacRate}%)`, result.vacPay, opts.ytdPrev.vac, false)
+  }
+  tableRow('Gross Pay', result.totalGross, opts.ytdPrev.gross + opts.ytdPrev.vac, true)
+
+  // Deductions
+  sectionHead('Statutory Deductions')
+  tableRow('CPP', result.cpp1, opts.ytdPrev.cpp1, false)
+  if (result.cpp2 > 0) tableRow('CPP2', result.cpp2, opts.ytdPrev.cpp2, false)
+  tableRow('EI', result.eiEmployee, opts.ytdPrev.ei, false)
+  if (opts.taxDisplay === 'separate') {
+    tableRow('Federal Tax', result.fedTax, opts.ytdPrev.fed, false)
+    tableRow(`Provincial Tax (${company.province})`, result.provTax, opts.ytdPrev.prov, false)
+  } else {
+    tableRow('Income Tax', result.fedTax + result.provTax, opts.ytdPrev.fed + opts.ytdPrev.prov, false)
+  }
+  tableRow('Total Statutory Deductions', result.totalDeductions, opts.ytdPrev.cpp1 + opts.ytdPrev.cpp2 + opts.ytdPrev.ei + opts.ytdPrev.fed + opts.ytdPrev.prov, true)
+
+  if (result.customDeductLines.length > 0) {
+    sectionHead('Other Deductions')
+    result.customDeductLines.forEach(d => tableRow(d.label, d.amount, null, false))
+    tableRow('Total Other Deductions', result.customDeductTotal, opts.ytdPrev.custom, true)
+  }
+
+  // Table border
+  bdr(mg, 63, fw, y - 63, lgray, 0.4)
+  y += 4
 
   // ── Net pay summary box ───────────────────────────────────────────────────
   const boxW = 80; const boxH2 = 18
@@ -476,14 +505,17 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
   const pageW = 215.9
   const mg    = 14
   const fw    = pageW - mg * 2
-  const navy  = [15, 40, 80]   as [number,number,number]
-  const teal  = [0, 120, 140]  as [number,number,number]
+  
+  // Color mode support
+  const navy  = opts.colorMode === 'bw' ? [0, 0, 0] as [number,number,number] : [15, 40, 80] as [number,number,number]
+  const teal  = opts.colorMode === 'bw' ? [0, 0, 0] as [number,number,number] : [0, 120, 140] as [number,number,number]
   const black = [20, 20, 20]   as [number,number,number]
   const dgray = [70, 70, 70]   as [number,number,number]
   const mgray = [130,130,130]  as [number,number,number]
-  const lgray = [220,225,230]  as [number,number,number]
-  const altbg = [242,245,248]  as [number,number,number]
+  const lgray = opts.colorMode === 'bw' ? [200,200,200] as [number,number,number] : [220,225,230] as [number,number,number]
+  const altbg = opts.colorMode === 'bw' ? [250,250,250] as [number,number,number] : [242,245,248] as [number,number,number]
   const white = [255,255,255]  as [number,number,number]
+  const headerSubText = opts.colorMode === 'bw' ? [150,150,150] as [number,number,number] : [180,200,220] as [number,number,number]
   let y = 0
 
   const sf = (style: string, size: number, c: [number,number,number] = black) => {
@@ -511,13 +543,13 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
   }
 
   sf('bold', 15, white); tx(company.name, logoEndX, 12)
-  sf('normal', 7.5, [180,200,220] as [number,number,number])
+  sf('normal', 7.5, headerSubText)
   tx(`${company.street}, ${company.city}, ${company.province}  ${company.postal}`, logoEndX, 18)
   if (company.cra_bn) tx(`CRA BN: ${company.cra_bn}`, logoEndX, 23)
 
   // Right side: PAY STATEMENT label
-  sf('bold', 9, [180,200,220] as [number,number,number]); tx('PAY STATEMENT', pageW - mg, 10, { align: 'right' })
-  sf('normal', 7.5, [180,200,220] as [number,number,number])
+  sf('bold', 9, headerSubText); tx('PAY STATEMENT', pageW - mg, 10, { align: 'right' })
+  sf('normal', 7.5, headerSubText)
   tx(`${fmtDateDisplay(opts.periodStart)} – ${fmtDateDisplay(opts.periodEnd)}`, pageW - mg, 16, { align: 'right' })
   tx(`Pay Date: ${fmtDateDisplay(opts.payDate)}`, pageW - mg, 22, { align: 'right' })
   y = 34
@@ -555,7 +587,7 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
   // ── Table rows helper ─────────────────────────────────────────────────────
   let rowIdx = 0
   function tableRow(label: string, period: number, ytd: number | null, bold = false) {
-    const bg = bold ? [232,238,245] as [number,number,number] : (rowIdx % 2 === 0 ? white : altbg)
+    const bg = bold ? (opts.colorMode === 'bw' ? [235,235,235] as [number,number,number] : [232,238,245] as [number,number,number]) : (rowIdx % 2 === 0 ? white : altbg)
     fr(mg, y, fw, rowH, bg)
     doc.setDrawColor(...lgray); doc.setLineWidth(0.15)
     doc.line(mg, y + rowH, mg + fw, y + rowH)
@@ -575,7 +607,7 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
     y += rowH; rowIdx++
   }
   function sectionHead(label: string) {
-    fr(mg, y, fw, 5.5, [235,240,248] as [number,number,number])
+    fr(mg, y, fw, 5.5, opts.colorMode === 'bw' ? [240,240,240] as [number,number,number] : [235,240,248] as [number,number,number])
     sf('bold', 6.5, teal); tx(label.toUpperCase(), mg + 3, y + 4)
     y += 5.5
   }

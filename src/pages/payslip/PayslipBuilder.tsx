@@ -669,8 +669,8 @@ export default function PayslipBuilder() {
 
             <div className="grid grid-cols-3 gap-3">
               {[
-                { label: 'YTD Gross Pay',         val: ytdGross,  set: setYtdGross  },
-                { label: 'YTD Vacation Pay',       val: ytdVac,    set: setYtdVac    },
+                { label: 'YTD Regular Pay',        val: ytdGross,  set: setYtdGross, hint: 'Regular earnings excluding vacation' },
+                { label: 'YTD Vacation Pay',       val: ytdVac,    set: setYtdVac, hint: 'Vacation pay only' },
                 { label: 'YTD CPP',                val: ytdCpp1,   set: setYtdCpp1   },
                 { label: 'YTD CPP2',               val: ytdCpp2,   set: setYtdCpp2   },
                 { label: 'YTD EI',                 val: ytdEi,     set: setYtdEi     },
@@ -688,6 +688,7 @@ export default function PayslipBuilder() {
                   <input type="number" className="input text-sm" min={0} step={0.01}
                     value={f.val || ''} placeholder="0.00"
                     onChange={e => f.set(parseFloat(e.target.value)||0)} />
+                  {f.hint && <p className="text-xs text-gray-400 mt-0.5">{f.hint}</p>}
                 </div>
               ))}
             </div>
@@ -776,9 +777,9 @@ export default function PayslipBuilder() {
               net:     result.netPay     * pSoFar,
               statutory: (result.cpp1 + result.cpp2 + result.eiEmployee + result.fedTax + result.provTax) * pSoFar,
             } : {
-              regular: Math.max(0, ytdGross - ytdVac) + result.regularPay,
+              regular: ytdGross + result.regularPay,
               ot:      result.otPay,
-              gross:   ytdGross  + result.totalGross,
+              gross:   ytdGross + ytdVac + result.totalGross,
               vac:     ytdVac    + result.vacPay,
               cpp1:    ytdCpp1   + result.cpp1,
               cpp2:    ytdCpp2   + result.cpp2,

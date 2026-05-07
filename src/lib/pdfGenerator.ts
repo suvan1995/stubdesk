@@ -177,7 +177,7 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
 
   // Earnings
   sectionHead('Earnings')
-  tableRow('Regular Pay', result.regularPay, opts.ytdPrev.gross - opts.ytdPrev.vac, false)
+  tableRow('Regular Pay', result.regularPay, opts.ytdPrev.gross, false)
   if (result.otPay > 0) tableRow(`Overtime Pay (${opts.overtimeMult}×)`, result.otPay, null, false)
   result.extraLines.forEach(e => tableRow(e.label, e.amount, null, false))
   // Always show vacation pay line, even when included
@@ -186,7 +186,7 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   } else if (result.vacPay > 0) {
     tableRow(`Vacation Pay (${opts.vacRate}%)`, result.vacPay, opts.ytdPrev.vac, false)
   }
-  tableRow('Gross Pay', result.totalGross, opts.ytdPrev.gross, true, T.rowHL)
+  tableRow('Gross Pay', result.totalGross, opts.ytdPrev.gross + opts.ytdPrev.vac, true, T.rowHL)
 
   // Deductions
   sectionHead('Statutory Deductions')
@@ -582,7 +582,7 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
 
   // Earnings
   sectionHead('Earnings')
-  tableRow('Regular Pay', result.regularPay, opts.ytdPrev.gross - opts.ytdPrev.vac)
+  tableRow('Regular Pay', result.regularPay, opts.ytdPrev.gross)
   if (result.otPay > 0) tableRow(`Overtime Pay (${opts.overtimeMult}×)`, result.otPay, null)
   result.extraLines.forEach(e => tableRow(e.label, e.amount, null))
   // Always show vacation pay line, even when included
@@ -591,7 +591,7 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
   } else if (result.vacPay > 0) {
     tableRow(`Vacation Pay (${opts.vacRate}%)`, result.vacPay, opts.ytdPrev.vac)
   }
-  tableRow('Gross Pay', result.totalGross, opts.ytdPrev.gross, true)
+  tableRow('Gross Pay', result.totalGross, opts.ytdPrev.gross + opts.ytdPrev.vac, true)
 
   // Deductions
   sectionHead('Statutory Deductions')

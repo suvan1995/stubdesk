@@ -14,7 +14,7 @@ type FormData = {
   company_id: string; name: string; emp_id: string; sin_last3: string
   address: string; job_title: string; department: string
   emp_type: 'salaried' | 'hourly'; rate: number; std_weekly_hours: number
-  pay_frequency: number; start_date: string
+  pay_frequency: number; start_date: string; bank_account_last4: string
 }
 
 const FREQ_OPTIONS = [
@@ -60,6 +60,7 @@ export default function EmployeesPage() {
       job_title: e.job_title ?? '', department: e.department ?? '',
       emp_type: e.emp_type, rate: e.rate, std_weekly_hours: e.std_weekly_hours,
       pay_frequency: e.pay_frequency, start_date: e.start_date ?? '',
+      bank_account_last4: e.bank_account_last4 ?? '',
     })
     setModalOpen(true)
   }
@@ -162,7 +163,10 @@ export default function EmployeesPage() {
             {...register('name', { required: 'Required' })} />
           <Input label="Employee ID" {...register('emp_id')} />
           <Input label="SIN (last 3 digits)" maxLength={3} {...register('sin_last3')} />
-          <Input label="Address" {...register('address')} />
+          <Input label="Bank Account (last 4 digits)" maxLength={4} placeholder="For EFT payments" {...register('bank_account_last4')} />
+          <div className="col-span-2">
+            <Input label="Address" {...register('address')} />
+          </div>
           <Input label="Job Title" {...register('job_title')} />
           <Input label="Department" {...register('department')} />
           <Select label="Employment Type" required

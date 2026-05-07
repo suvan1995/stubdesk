@@ -67,6 +67,7 @@ export interface Database {
           std_weekly_hours: number
           pay_frequency: 52 | 26 | 24 | 12
           start_date: string | null
+          bank_account_last4: string | null
           created_at: string
           updated_at: string
         }

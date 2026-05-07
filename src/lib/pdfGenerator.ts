@@ -118,17 +118,19 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   y = 33
 
   // ── EMPLOYEE / PERIOD INFO ────────────────────────────────────
-  const payDateLabel = opts.payMethod === 'cheque'
-    ? `${fmtDateDisplay(opts.chequeDate)}  (cheque #${opts.chequeNumber})`
-    : `${fmtDateDisplay(opts.payDate)}  (EFT deposit)`
+  const paymentInfo = opts.payMethod === 'cheque'
+    ? `Cheque #${opts.chequeNumber || 'N/A'}`
+    : employee.bank_account_last4 
+      ? `EFT - Account ****${employee.bank_account_last4}`
+      : 'Direct Deposit (EFT)'
 
   const infoLines: [string, string, string, string][] = [
-    ['Employee:',  employee.name,                    'Employee ID:', employee.emp_id ?? 'N/A'],
-    ['Province:',  company.province,                 'Pay Date:',    payDateLabel],
-    ['Pay Period:', `${fmtDateDisplay(opts.periodStart)} to ${fmtDateDisplay(opts.periodEnd)}`, 'Payment:', opts.payMethod === 'cheque' ? 'Cheque' : 'Direct Deposit (EFT)'],
+    ['Employee:',  employee.name,                    'Employee ID:', employee.emp_id || 'N/A'],
+    ['Address:',   employee.address || 'N/A',        'Pay Date:',    fmtDateDisplay(opts.payDate)],
+    ['Pay Period:', `${fmtDateDisplay(opts.periodStart)} to ${fmtDateDisplay(opts.periodEnd)}`, 'Payment:', paymentInfo],
   ]
   if (employee.job_title || employee.department) {
-    infoLines.push(['Title/Dept:', [employee.job_title, employee.department].filter(Boolean).join(' · '), '', ''])
+    infoLines.push(['Title/Dept:', [employee.job_title, employee.department].filter(Boolean).join(' · ') || 'N/A', '', ''])
   }
 
   const infoH = infoLines.length * 6 + 4
@@ -387,6 +389,16 @@ function generateQuickBooksStyle(opts: PayslipPDFOptions): Blob {
     sf('normal', 7.5, mgray)
     tx([employee.job_title, employee.department].filter(Boolean).join(' · '), mg, y); y += 4
   }
+  
+  // Payment method info
+  const paymentInfo = opts.payMethod === 'cheque'
+    ? `Cheque #${opts.chequeNumber || 'N/A'}`
+    : employee.bank_account_last4
+      ? `EFT - Account ****${employee.bank_account_last4}`
+      : 'Direct Deposit (EFT)'
+  sf('normal', 7.5, mgray)
+  tx(`Payment: ${paymentInfo}`, mg + halfW, y); y += 4
+  
   y += 3; rule(y); y += 6
 
   // ── Earnings & Deductions Table with YTD ─────────────────────────────────
@@ -558,11 +570,16 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
   fr(mg, y, fw, 18, altbg)
   bdr(mg, y, fw, 18)
   const q = fw / 4
+  const paymentInfo = opts.payMethod === 'cheque'
+    ? `Cheque #${opts.chequeNumber || 'N/A'}`
+    : employee.bank_account_last4
+      ? `EFT ****${employee.bank_account_last4}`
+      : 'Direct Deposit'
   const infoItems = [
     { label: 'Employee', val: employee.name },
-    { label: 'ID', val: employee.emp_id ?? 'N/A' },
+    { label: 'ID', val: employee.emp_id || 'N/A' },
     { label: 'Title / Dept', val: [employee.job_title, employee.department].filter(Boolean).join(' · ') || '—' },
-    { label: 'Payment', val: opts.payMethod === 'cheque' ? `Cheque #${opts.chequeNumber}` : 'Direct Deposit' },
+    { label: 'Payment', val: paymentInfo },
   ]
   infoItems.forEach((item, i) => {
     const x = mg + i * q
@@ -570,7 +587,16 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
     sf('normal', 8, black); tx(item.val, x + 3, y + 12)
     if (i < 3) { doc.setDrawColor(...lgray); doc.setLineWidth(0.2); doc.line(x + q, y, x + q, y + 18) }
   })
-  y += 22
+  y += 18
+  
+  // Employee address if provided
+  if (employee.address) {
+    fr(mg, y, fw, 6, white)
+    bdr(mg, y, fw, 6)
+    sf('normal', 7, dgray); tx(`Address: ${employee.address}`, mg + 3, y + 4)
+    y += 6
+  }
+  y += 4
 
   // ── Table header ─────────────────────────────────────────────────────────
   const descW = fw * 0.50

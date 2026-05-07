@@ -32,6 +32,7 @@ export default function PayslipBuilder() {
 
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
   const [result, setResult] = useState<PayslipResult | null>(null)
   const [anchorWarning, setAnchorWarning] = useState(false)
 
@@ -203,33 +204,32 @@ export default function PayslipBuilder() {
     }
   }
 
-  function handleCalculate() {
-    if (!selectedCompany || !selectedEmployee) return
+  async function handleCalculate() {
+    if (!selectedCompany || !selectedEmployee || !profile) return
+    
+    // Calculate the payslip
     const inputs = buildInputs()
-    setResult(calculatePayslip(inputs))
-    setStep(3)
-  }
-
-  async function handleSave() {
-    if (!result || !selectedCompany || !selectedEmployee || !profile) return
+    const calculatedResult = calculatePayslip(inputs)
+    setResult(calculatedResult)
+    
+    // Auto-save to cloud
     setSaving(true)
 
     // Split combined tax YTD if needed
     let ytdFedToUse = ytdFed
     let ytdProvToUse = ytdProv
     if (ytdTaxMode === 'combined' && ytdFed > 0) {
-      // Split based on current period's ratio
-      const totalCurrentTax = result.fedTax + result.provTax
+      const totalCurrentTax = calculatedResult.fedTax + calculatedResult.provTax
       if (totalCurrentTax > 0) {
-        const fedRatio = result.fedTax / totalCurrentTax
+        const fedRatio = calculatedResult.fedTax / totalCurrentTax
         ytdFedToUse = ytdFed * fedRatio
         ytdProvToUse = ytdFed * (1 - fedRatio)
       }
     }
 
-    // 1. Generate PDF blob
+    // Generate PDF blob
     const pdfBlob = generatePayslipPDF({
-      result,
+      result: calculatedResult,
       company:      selectedCompany,
       employee:     selectedEmployee,
       periodStart,
@@ -258,8 +258,7 @@ export default function PayslipBuilder() {
       },
     })
 
-    // 2. Upload to Supabase Storage
-    //    Path: {userId}/{CompanyName}/{EmployeeName}/{periodStart}.pdf
+    // Upload to Supabase Storage
     const storagePath = buildStoragePath(
       profile.id,
       selectedCompany.name,
@@ -272,18 +271,17 @@ export default function PayslipBuilder() {
       .from('payslips')
       .upload(storagePath, pdfBlob, {
         contentType: 'application/pdf',
-        upsert: true,          // overwrite if re-saving same period
+        upsert: true,
       })
 
     if (!uploadError) {
-      // Create a signed URL valid for 10 years (effectively permanent for the user)
       const { data: signedData } = await supabase.storage
         .from('payslips')
         .createSignedUrl(storagePath, 60 * 60 * 24 * 365 * 10)
       pdfUrl = signedData?.signedUrl ?? null
     }
 
-    // 3. Save payslip record with pdf_url
+    // Save payslip record with pdf_url
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase.from('payslips') as any).insert({
       user_id:           profile.id,
@@ -294,23 +292,24 @@ export default function PayslipBuilder() {
       pay_date:          payDate,
       pay_method:        payMethod,
       cheque_number:     chequeNum || null,
-      gross_pay:         result.totalGross,
-      cpp1:              result.cpp1,
-      cpp2:              result.cpp2,
-      ei:                result.eiEmployee,
-      fed_tax:           result.fedTax,
-      prov_tax:          result.provTax,
-      net_pay:           result.netPay,
-      custom_deductions: result.customDeductLines,
-      extra_earnings:    result.extraLines,
-      vac_pay:           result.vacPay,
+      gross_pay:         calculatedResult.totalGross,
+      cpp1:              calculatedResult.cpp1,
+      cpp2:              calculatedResult.cpp2,
+      ei:                calculatedResult.eiEmployee,
+      fed_tax:           calculatedResult.fedTax,
+      prov_tax:          calculatedResult.provTax,
+      net_pay:           calculatedResult.netPay,
+      custom_deductions: calculatedResult.customDeductLines,
+      extra_earnings:    calculatedResult.extraLines,
+      vac_pay:           calculatedResult.vacPay,
       template,
       notes:             notes || null,
       pdf_url:           pdfUrl,
     })
 
     setSaving(false)
-    navigate('/payslips')
+    setSaved(true)
+    setStep(3)
   }
 
   const empOptions = employees
@@ -713,7 +712,9 @@ export default function PayslipBuilder() {
 
           <div className="flex justify-between">
             <button className="btn-ghost" onClick={() => setStep(1)}>← Back</button>
-            <button className="btn-success" onClick={handleCalculate}>⚙ Calculate &amp; Preview →</button>
+            <button className="btn-success" onClick={handleCalculate} disabled={saving}>
+              {saving ? '☁ Saving to Cloud...' : '⚙ Calculate & Save →'}
+            </button>
           </div>
         </div>
       )}
@@ -721,6 +722,17 @@ export default function PayslipBuilder() {
       {/* ── STEP 3: Preview ── */}
       {step === 3 && result && selectedEmployee && selectedCompany && (
         <div className="space-y-4">
+          {/* Success message */}
+          {saved && (
+            <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-4 flex items-center gap-3">
+              <div className="text-green-600 text-2xl">✓</div>
+              <div className="flex-1">
+                <div className="font-semibold text-green-800">Payslip Saved Successfully!</div>
+                <div className="text-sm text-green-600">The payslip has been saved to the cloud and is available in your payslips list.</div>
+              </div>
+            </div>
+          )}
+
           {/* Summary card */}
           <Card>
             <div className="flex items-center justify-between mb-4">
@@ -886,54 +898,55 @@ export default function PayslipBuilder() {
             </div>
           </Card>
 
-          <div className="flex gap-3 flex-wrap">
+          <div className="flex gap-3 flex-wrap justify-between">
             <button className="btn-ghost" onClick={() => setStep(2)}>← Edit</button>
-            <button className="btn-success" onClick={handleSave} disabled={saving}>
-              {saving ? 'Uploading & Saving…' : '☁ Save to Cloud'}
-            </button>
-            <button className="btn-secondary" onClick={() => {
-              if (!result || !selectedCompany || !selectedEmployee) return
-              
-              // Split combined tax YTD if needed
-              let ytdFedToUse = ytdFed
-              let ytdProvToUse = ytdProv
-              if (ytdTaxMode === 'combined' && ytdFed > 0) {
-                const totalCurrentTax = result.fedTax + result.provTax
-                if (totalCurrentTax > 0) {
-                  const fedRatio = result.fedTax / totalCurrentTax
-                  ytdFedToUse = ytdFed * fedRatio
-                  ytdProvToUse = ytdFed * (1 - fedRatio)
+            <div className="flex gap-3">
+              <button className="btn-secondary" onClick={() => {
+                if (!result || !selectedCompany || !selectedEmployee) return
+                
+                // Split combined tax YTD if needed
+                let ytdFedToUse = ytdFed
+                let ytdProvToUse = ytdProv
+                if (ytdTaxMode === 'combined' && ytdFed > 0) {
+                  const totalCurrentTax = result.fedTax + result.provTax
+                  if (totalCurrentTax > 0) {
+                    const fedRatio = result.fedTax / totalCurrentTax
+                    ytdFedToUse = ytdFed * fedRatio
+                    ytdProvToUse = ytdFed * (1 - fedRatio)
+                  }
                 }
-              }
-              
-              const blob = generatePayslipPDF({
-                result, company: selectedCompany, employee: selectedEmployee,
-                periodStart, periodEnd, payDate, payMethod,
-                chequeNumber: chequeNum, chequeDate, vacType, vacRate,
-                overtimeMult, notes, template, logoDataURL: selectedCompany.logo_url,
-                taxDisplay,
-                ytdPrev: {
-                  gross:  ytdGross,
-                  vac:    ytdVac,
-                  cpp1:   ytdCpp1,
-                  cpp2:   ytdCpp2,
-                  ei:     ytdEi,
-                  fed:    ytdFedToUse,
-                  prov:   ytdProvToUse,
-                  custom: ytdCustom,
-                  net:    ytdNet,
-                },
-              })
-              const url = URL.createObjectURL(blob)
-              const a   = document.createElement('a')
-              a.href    = url
-              a.download = `${selectedEmployee.name.split(' ')[0]}_${periodStart}.pdf`
-              a.click()
+                
+                const blob = generatePayslipPDF({
+                  result, company: selectedCompany, employee: selectedEmployee,
+                  periodStart, periodEnd, payDate, payMethod,
+                  chequeNumber: chequeNum, chequeDate, vacType, vacRate,
+                  overtimeMult, notes, template, logoDataURL: selectedCompany.logo_url,
+                  taxDisplay,
+                  ytdPrev: {
+                    gross:  ytdGross,
+                    vac:    ytdVac,
+                    cpp1:   ytdCpp1,
+                    cpp2:   ytdCpp2,
+                    ei:     ytdEi,
+                    fed:    ytdFedToUse,
+                    prov:   ytdProvToUse,
+                    custom: ytdCustom,
+                    net:    ytdNet,
+                  },
+                })
+                const url = URL.createObjectURL(blob)
+                const a   = document.createElement('a')
+                a.href    = url
+                a.download = `${selectedEmployee.name.split(' ')[0]}_${periodStart}.pdf`
+                a.click()
               URL.revokeObjectURL(url)
             }}>
               ⬇ Download PDF
             </button>
-            <button className="btn-ghost" onClick={() => navigate('/payslips')}>Cancel</button>
+            <button className="btn-primary" onClick={() => navigate('/payslips')}>
+              View All Payslips →
+            </button>
+            </div>
           </div>
         </div>
       )}

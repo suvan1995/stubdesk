@@ -90,20 +90,39 @@ export const useCompanyStore = create<CompanyState>((set, get) => ({
   createEmployee: async (data) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
+    
     // Ensure numeric fields are numbers, not strings
-    const payload = {
-      ...data,
-      rate:             parseFloat(String(data.rate))             || 0,
+    const payload: any = {
+      company_id:       data.company_id,
+      name:             data.name,
+      emp_id:           data.emp_id || null,
+      sin_last3:        data.sin_last3 || null,
+      address:          data.address || null,
+      job_title:        data.job_title || null,
+      department:       data.department || null,
+      emp_type:         data.emp_type,
+      rate:             parseFloat(String(data.rate)) || 0,
       std_weekly_hours: parseFloat(String(data.std_weekly_hours)) || 40,
-      pay_frequency:    parseInt(String(data.pay_frequency))      || 26,
-      user_id: user.id,
+      pay_frequency:    parseInt(String(data.pay_frequency)) || 26,
+      start_date:       data.start_date || null,
+      user_id:          user.id,
     }
+    
+    // Only include bank_account_last4 if it exists (for backward compatibility)
+    if ('bank_account_last4' in data && data.bank_account_last4) {
+      payload.bank_account_last4 = data.bank_account_last4
+    }
+    
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: created, error } = await (supabase.from('employees') as any)
       .insert(payload)
       .select()
       .single()
-    if (error || !created) return null
+    if (error) {
+      console.error('Error creating employee:', error)
+      return null
+    }
+    if (!created) return null
     const employee = created as Employee
     set(s => ({ employees: [...s.employees, employee] }))
     return employee

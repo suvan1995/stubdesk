@@ -67,9 +67,21 @@ export default function EmployeesPage() {
 
   async function onSubmit(data: FormData) {
     const payload = { ...data, rate: Number(data.rate), std_weekly_hours: Number(data.std_weekly_hours), pay_frequency: Number(data.pay_frequency) as 52|26|24|12 }
-    if (editing) await updateEmployee(editing.id, payload)
-    else await createEmployee(payload)
-    setModalOpen(false)
+    try {
+      if (editing) {
+        await updateEmployee(editing.id, payload)
+      } else {
+        const result = await createEmployee(payload)
+        if (!result) {
+          alert('Failed to create employee. Please check the console for errors.')
+          return
+        }
+      }
+      setModalOpen(false)
+    } catch (err) {
+      console.error('Error submitting employee:', err)
+      alert('An error occurred. Please try again.')
+    }
   }
 
   const filtered = filterCo ? employees.filter(e => e.company_id === filterCo) : employees

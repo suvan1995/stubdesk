@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useCompanyStore } from '@/store/companyStore'
+import { useToast } from '@/components/ui/Toast'
 import { fmtCAD } from '@/lib/payrollEngine'
 import { fmtDisplay } from '@/lib/dateUtils'
 import clsx from 'clsx'
@@ -38,6 +39,7 @@ function empColour(name: string) {
 export default function PayrollSummaryPage() {
   const navigate = useNavigate()
   const { companies, employees, fetchCompanies, fetchEmployees } = useCompanyStore()
+  const { success, error: toastError } = useToast()
 
   const [payslips,   setPayslips]   = useState<Payslip[]>([])
   const [loading,    setLoading]    = useState(true)
@@ -59,22 +61,32 @@ export default function PayrollSummaryPage() {
       .select('*')
       .gte('pay_date', monthKey + '-01')
       .lte('pay_date', monthKey + '-31')
+      .eq('archived', false)
       .order('pay_date', { ascending: true })
     if (filterCo) q = q.eq('company_id', filterCo)
-    const { data } = await q
+    const { data, error } = await q
+    if (error) {
+      console.error('loadPayslips payroll:', error)
+      toastError('Failed to load payroll data', error.message)
+    }
     setPayslips((data ?? []) as Payslip[])
     setLoading(false)
   }
 
   async function handleDelete(p: Payslip) {
-    if (!confirm('Delete this payslip?')) return
+    if (!confirm('Archive this payslip? It will be hidden but retained for audit purposes.')) return
     setDeleting(p.id)
-    if (p.pdf_url) {
-      const match = p.pdf_url.match(/\/object\/sign\/payslips\/(.+?)\?/)
-      if (match) await supabase.storage.from('payslips').remove([decodeURIComponent(match[1])])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from('payslips') as any)
+      .update({ archived: true, archived_at: new Date().toISOString() })
+      .eq('id', p.id)
+    if (error) {
+      console.error('archive payslip:', error)
+      toastError('Failed to archive payslip', error.message)
+    } else {
+      setPayslips(prev => prev.filter(x => x.id !== p.id))
+      success('Payslip archived')
     }
-    await supabase.from('payslips').delete().eq('id', p.id)
-    setPayslips(prev => prev.filter(x => x.id !== p.id))
     setDeleting(null)
   }
 

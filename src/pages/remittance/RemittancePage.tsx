@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useCompanyStore } from '@/store/companyStore'
 import { fmtCAD } from '@/lib/payrollEngine'
+import { useToast } from '@/components/ui/Toast'
 import { supabase } from '@/lib/supabase'
 import type { Payslip, Company } from '@/types/database'
 
@@ -36,6 +37,7 @@ interface RemitRow {
 
 export default function RemittancePage() {
   const { companies, fetchCompanies } = useCompanyStore()
+  const { error: toastError } = useToast()
   const [payslips, setPayslips] = useState<Payslip[]>([])
   const [loading,  setLoading]  = useState(true)
   const [monthKey, setMonthKey] = useState(() => getMonthKey(new Date().toISOString()))
@@ -46,10 +48,15 @@ export default function RemittancePage() {
   async function loadPayslips() {
     setLoading(true)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase.from('payslips') as any)
+    const { data, error } = await (supabase.from('payslips') as any)
       .select('*')
       .gte('pay_date', monthKey + '-01')
       .lte('pay_date', monthKey + '-31')
+      .eq('archived', false)
+    if (error) {
+      console.error('loadPayslips remittance:', error)
+      toastError('Failed to load payslips', error.message)
+    }
     setPayslips((data ?? []) as Payslip[])
     setLoading(false)
   }
@@ -72,8 +79,34 @@ export default function RemittancePage() {
 
   // CRA due date: 15th of the following month
   const [y, m] = monthKey.split('-').map(Number)
-  const dueDate = new Date(y, m, 15) // month is 0-indexed, so m = next month
+  const dueDate = new Date(y, m, 15)
   const dueDateStr = dueDate.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' })
+
+  function exportRemittanceCSV() {
+    if (rows.length === 0) return
+    const headers = ['Company','CRA BN','Payslips','Emp CPP','Emp CPP2','Emp EI','Fed Tax','Prov Tax','Empr CPP','Empr EI','Total Remittance']
+    const csvRows = rows.map(r => [
+      r.company.name,
+      r.company.cra_bn || '',
+      r.payslips.length,
+      r.empCPP.toFixed(2),
+      r.empCPP2.toFixed(2),
+      r.empEI.toFixed(2),
+      r.empFed.toFixed(2),
+      r.empProv.toFixed(2),
+      r.emprCPP.toFixed(2),
+      r.emprEI.toFixed(2),
+      r.totalRemit.toFixed(2),
+    ])
+    const csv = [headers, ...csvRows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `remittance_${monthKey}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -82,6 +115,11 @@ export default function RemittancePage() {
           <h1 className="text-2xl font-bold text-gray-800">Remittance</h1>
           <p className="text-sm text-gray-400 mt-0.5">CRA payroll remittance summary by company</p>
         </div>
+        {rows.length > 0 && (
+          <button className="btn-ghost text-sm" onClick={exportRemittanceCSV}>
+            ⬇ Export CSV
+          </button>
+        )}
       </div>
 
       {/* Period nav */}

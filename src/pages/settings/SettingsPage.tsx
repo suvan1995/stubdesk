@@ -2,39 +2,40 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { supabase } from '@/lib/supabase'
+import { useToast } from '@/components/ui/Toast'
 import { Card, CardTitle } from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 
 export default function SettingsPage() {
   const { profile, fetchProfile } = useAuthStore()
+  const { success, error: toastError, info } = useToast()
   const [fullName, setFullName] = useState(profile?.full_name ?? '')
   const [saving,   setSaving]   = useState(false)
-  const [msg,      setMsg]      = useState<{ text: string; ok: boolean } | null>(null)
 
   const [_curPw, setCurPw]  = useState('')
   const [newPw,  setNewPw]  = useState('')
-  const [pwMsg,  setPwMsg]  = useState<{ text: string; ok: boolean } | null>(null)
   const [pwSaving, setPwSaving] = useState(false)
 
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault()
-    setSaving(true); setMsg(null)
+    setSaving(true)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase.from('profiles') as any)
       .update({ full_name: fullName })
       .eq('id', profile!.id)
     setSaving(false)
-    if (error) setMsg({ text: error.message, ok: false })
-    else { setMsg({ text: 'Profile updated.', ok: true }); fetchProfile() }
+    if (error) toastError('Failed to update profile', error.message)
+    else { success('Profile updated'); fetchProfile() }
   }
 
   async function changePassword(e: React.FormEvent) {
     e.preventDefault()
-    if (newPw.length < 8) { setPwMsg({ text: 'Password must be at least 8 characters.', ok: false }); return }
-    setPwSaving(true); setPwMsg(null)
+    if (newPw.length < 8) { toastError('Password too short', 'Must be at least 8 characters.'); return }
+    setPwSaving(true)
     const { error } = await supabase.auth.updateUser({ password: newPw })
     setPwSaving(false)
-    if (error) setPwMsg({ text: error.message, ok: false })
-    else { setPwMsg({ text: 'Password changed successfully.', ok: true }); setCurPw(''); setNewPw('') }
+    if (error) toastError('Failed to change password', error.message)
+    else { success('Password changed successfully'); setCurPw(''); setNewPw('') }
   }
 
   return (
@@ -51,9 +52,6 @@ export default function SettingsPage() {
             <input className="input bg-gray-50" value={profile?.email ?? ''} disabled />
             <p className="text-xs text-gray-400 mt-1">Email cannot be changed here. Contact support.</p>
           </div>
-          {msg && (
-            <p className={`text-sm ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>
-          )}
           <button type="submit" className="btn-primary" disabled={saving}>
             {saving ? 'Saving…' : 'Save Profile'}
           </button>
@@ -66,9 +64,6 @@ export default function SettingsPage() {
         <form onSubmit={changePassword} className="space-y-4">
           <Input label="New Password" type="password" value={newPw}
             onChange={e => setNewPw(e.target.value)} placeholder="Min. 8 characters" />
-          {pwMsg && (
-            <p className={`text-sm ${pwMsg.ok ? 'text-green-600' : 'text-red-500'}`}>{pwMsg.text}</p>
-          )}
           <button type="submit" className="btn-primary" disabled={pwSaving}>
             {pwSaving ? 'Updating…' : 'Change Password'}
           </button>
@@ -106,7 +101,7 @@ export default function SettingsPage() {
         </p>
         <button className="btn-danger" onClick={() => {
           if (confirm('Are you absolutely sure? This will delete your account and all data permanently.')) {
-            alert('Please contact support to delete your account.')
+            info('Account deletion', 'Please contact support at support@stubdesk.com to delete your account.')
           }
         }}>
           Delete Account

@@ -107,6 +107,63 @@ export function calcProvincialTax(
   return Math.max(0, tax)
 }
 
+// ── Input validation ──────────────────────────────────────────────────────────
+
+export interface PayslipValidationError {
+  field: string
+  message: string
+}
+
+export function validatePayslipInputs(inputs: PayslipInputs): PayslipValidationError[] {
+  const errors: PayslipValidationError[] = []
+
+  if (!inputs.province || !['ON','AB','BC'].includes(inputs.province)) {
+    errors.push({ field: 'province', message: 'Province must be ON, AB, or BC' })
+  }
+  if (!inputs.empType || !['salaried','hourly'].includes(inputs.empType)) {
+    errors.push({ field: 'empType', message: 'Employment type must be salaried or hourly' })
+  }
+  if (inputs.empType === 'salaried' && (isNaN(inputs.annualSalary) || inputs.annualSalary < 0)) {
+    errors.push({ field: 'annualSalary', message: 'Annual salary must be a non-negative number' })
+  }
+  if (inputs.empType === 'hourly' && (isNaN(inputs.hourlyRate) || inputs.hourlyRate < 0)) {
+    errors.push({ field: 'hourlyRate', message: 'Hourly rate must be a non-negative number' })
+  }
+  if (inputs.empType === 'hourly' && inputs.hourlyRate > 0 && inputs.hourlyRate < 10) {
+    errors.push({ field: 'hourlyRate', message: 'Hourly rate seems too low — below $10/hr' })
+  }
+  if (!inputs.periods || ![52,26,24,12].includes(inputs.periods)) {
+    errors.push({ field: 'periods', message: 'Pay frequency must be 52, 26, 24, or 12' })
+  }
+  if (isNaN(inputs.vacRate) || inputs.vacRate < 0 || inputs.vacRate > 25) {
+    errors.push({ field: 'vacRate', message: 'Vacation rate must be between 0% and 25%' })
+  }
+  if (inputs.overtimeHours < 0) {
+    errors.push({ field: 'overtimeHours', message: 'Overtime hours cannot be negative' })
+  }
+  if (inputs.overtimeMultiplier < 1) {
+    errors.push({ field: 'overtimeMultiplier', message: 'Overtime multiplier must be at least 1.0' })
+  }
+  if (!inputs.periodStart || !inputs.periodEnd) {
+    errors.push({ field: 'periodDates', message: 'Pay period start and end dates are required' })
+  }
+  if (inputs.periodStart && inputs.periodEnd && inputs.periodStart > inputs.periodEnd) {
+    errors.push({ field: 'periodDates', message: 'Period start must be before period end' })
+  }
+  for (const e of inputs.extraEarnings) {
+    if (isNaN(e.amount) || e.amount < 0) {
+      errors.push({ field: 'extraEarnings', message: `Extra earning "${e.label}" has an invalid amount` })
+    }
+  }
+  for (const d of inputs.customDeductions) {
+    if (isNaN(d.amount) || d.amount < 0) {
+      errors.push({ field: 'customDeductions', message: `Deduction "${d.label}" has an invalid amount` })
+    }
+  }
+
+  return errors
+}
+
 // ── Master calculation ────────────────────────────────────────────────────────
 
 export function calculatePayslip(inputs: PayslipInputs): PayslipResult {

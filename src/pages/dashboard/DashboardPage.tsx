@@ -1,24 +1,35 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useCompanyStore } from '@/store/companyStore'
+import { useLimitsStore } from '@/store/limitsStore'
+import { supabase } from '@/lib/supabase'
 import { Card, CardTitle } from '@/components/ui/Card'
 
 export default function DashboardPage() {
   const { profile } = useAuthStore()
   const { companies, employees, fetchCompanies, fetchEmployees } = useCompanyStore()
+  const { payslipsThisMonth } = useLimitsStore()
+  const [totalPayslips, setTotalPayslips] = useState<number | null>(null)
 
   useEffect(() => {
     fetchCompanies()
     fetchEmployees()
+    // Load total payslip count
+    supabase
+      .from('payslips')
+      .select('id', { count: 'exact', head: true })
+      .eq('archived', false)
+      .then(({ count }) => setTotalPayslips(count ?? 0))
   }, [fetchCompanies, fetchEmployees])
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there'
 
   const stats = [
-    { label: 'Companies',  value: companies.length,  to: '/companies',  color: 'bg-brand-50 text-brand-700' },
-    { label: 'Employees',  value: employees.length,  to: '/employees',  color: 'bg-green-50 text-green-700' },
-    { label: 'Payslips',   value: '—',               to: '/payslips',   color: 'bg-purple-50 text-purple-700' },
+    { label: 'Companies',  value: companies.length,                    to: '/companies',  color: 'bg-brand-50 text-brand-700' },
+    { label: 'Employees',  value: employees.length,                    to: '/employees',  color: 'bg-green-50 text-green-700' },
+    { label: 'Payslips',   value: totalPayslips ?? '…',                to: '/payslips',   color: 'bg-purple-50 text-purple-700' },
+    { label: 'This Month', value: payslipsThisMonth,                   to: '/payslips',   color: 'bg-orange-50 text-orange-700' },
   ]
 
   return (
@@ -57,7 +68,7 @@ export default function DashboardPage() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {stats.map(s => (
           <Link key={s.label} to={s.to}>
             <Card className="hover:shadow-md transition-shadow cursor-pointer">

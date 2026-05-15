@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useCompanyStore } from '@/store/companyStore'
+import { useToast } from '@/components/ui/Toast'
 import { Card } from '@/components/ui/Card'
 import { fmtCAD } from '@/lib/payrollEngine'
 import type { Payslip, Company, Employee } from '@/types/database'
@@ -27,6 +28,7 @@ function fmtDate(str: string) {
 
 export default function PayslipsPage() {
   const { companies, employees, fetchCompanies, fetchEmployees } = useCompanyStore()
+  const { success, error: toastError } = useToast()
   const [payslips,  setPayslips]  = useState<Payslip[]>([])
   const [loading,   setLoading]   = useState(true)
   const [openCos,   setOpenCos]   = useState<Set<string>>(new Set())
@@ -41,10 +43,17 @@ export default function PayslipsPage() {
 
   async function loadPayslips() {
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('payslips')
       .select('*')
+      .eq('archived', false)
       .order('pay_date', { ascending: false })
+    if (error) {
+      console.error('loadPayslips:', error)
+      toastError('Failed to load payslips', error.message)
+      setLoading(false)
+      return
+    }
     const slips = (data ?? []) as Payslip[]
     setPayslips(slips)
     // Auto-expand companies and employees that have payslips
@@ -56,19 +65,54 @@ export default function PayslipsPage() {
   }
 
   async function handleDelete(payslip: Payslip) {
-    if (!confirm('Delete this payslip? This cannot be undone.')) return
+    if (!confirm('Archive this payslip? It will be hidden from view but retained for audit purposes.')) return
     setDeleting(payslip.id)
-    // Delete PDF from storage if it exists
-    if (payslip.pdf_url) {
-      // Extract path from signed URL — everything after /object/sign/payslips/
-      const match = payslip.pdf_url.match(/\/object\/sign\/payslips\/(.+?)\?/)
-      if (match) {
-        await supabase.storage.from('payslips').remove([decodeURIComponent(match[1])])
-      }
+    // Soft delete — set archived = true instead of hard deleting
+    const { error } = await (supabase
+      .from('payslips') as any)
+      .update({ archived: true, archived_at: new Date().toISOString() })
+      .eq('id', payslip.id)
+    if (error) {
+      console.error('archive payslip:', error)
+      toastError('Failed to archive payslip', error.message)
+    } else {
+      setPayslips(prev => prev.filter(p => p.id !== payslip.id))
+      success('Payslip archived')
     }
-    await supabase.from('payslips').delete().eq('id', payslip.id)
-    setPayslips(prev => prev.filter(p => p.id !== payslip.id))
     setDeleting(null)
+  }
+
+  // ── CSV Export ────────────────────────────────────────────────
+  function exportCSV() {
+    if (payslips.length === 0) return
+    const headers = ['Employee','Company','Period Start','Period End','Pay Date','Gross Pay','CPP','CPP2','EI','Fed Tax','Prov Tax','Net Pay','Pay Method']
+    const rows = payslips.map(p => {
+      const emp = employees.find(e => e.id === p.employee_id)
+      const co  = companies.find(c => c.id === p.company_id)
+      return [
+        emp?.name ?? '',
+        co?.name ?? '',
+        p.period_start,
+        p.period_end,
+        p.pay_date,
+        p.gross_pay.toFixed(2),
+        p.cpp1.toFixed(2),
+        p.cpp2.toFixed(2),
+        p.ei.toFixed(2),
+        p.fed_tax.toFixed(2),
+        p.prov_tax.toFixed(2),
+        p.net_pay.toFixed(2),
+        p.pay_method,
+      ]
+    })
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `payslips_export_${new Date().toISOString().slice(0,10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   // ── Build tree: Company → Employee → Payslips ─────────────────
@@ -105,7 +149,14 @@ export default function PayslipsPage() {
             {payslips.length} payslip{payslips.length !== 1 ? 's' : ''} stored in the cloud
           </p>
         </div>
-        <Link to="/payslip/new" className="btn-primary">+ New Payslip</Link>
+        <div className="flex gap-2">
+          {payslips.length > 0 && (
+            <button className="btn-ghost text-sm" onClick={exportCSV} title="Export all payslips as CSV">
+              ⬇ Export CSV
+            </button>
+          )}
+          <Link to="/payslip/new" className="btn-primary">+ New Payslip</Link>
+        </div>
       </div>
 
       {loading ? (
@@ -233,13 +284,13 @@ export default function PayslipsPage() {
                                 )}
                               </div>
 
-                              {/* Delete */}
+                              {/* Archive */}
                               <div className="text-right">
                                 <button
                                   className="text-gray-300 hover:text-red-500 transition-colors text-xs px-1"
                                   onClick={() => handleDelete(p)}
                                   disabled={deleting === p.id}
-                                  title="Delete payslip"
+                                  title="Archive payslip (hidden but not deleted)"
                                 >
                                   ✕
                                 </button>

@@ -8,14 +8,15 @@ interface CompanyState {
   activeCompany:  Company | null
   activeEmployee: Employee | null
   loading: boolean
+  error:   string | null
   fetchCompanies:  () => Promise<void>
   fetchEmployees:  (companyId?: string) => Promise<void>
   createCompany:   (data: Omit<Company, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<Company | null>
-  updateCompany:   (id: string, data: Partial<Company>) => Promise<void>
-  deleteCompany:   (id: string) => Promise<void>
+  updateCompany:   (id: string, data: Partial<Company>) => Promise<{ error: string | null }>
+  deleteCompany:   (id: string) => Promise<{ error: string | null }>
   createEmployee:  (data: Omit<Employee, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<Employee | null>
-  updateEmployee:  (id: string, data: Partial<Employee>) => Promise<void>
-  deleteEmployee:  (id: string) => Promise<void>
+  updateEmployee:  (id: string, data: Partial<Employee>) => Promise<{ error: string | null }>
+  deleteEmployee:  (id: string) => Promise<{ error: string | null }>
   setActiveCompany:  (company: Company | null) => void
   setActiveEmployee: (employee: Employee | null) => void
 }
@@ -26,13 +27,19 @@ export const useCompanyStore = create<CompanyState>((set, get) => ({
   activeCompany:  null,
   activeEmployee: null,
   loading: false,
+  error:   null,
 
   fetchCompanies: async () => {
-    set({ loading: true })
-    const { data } = await supabase
+    set({ loading: true, error: null })
+    const { data, error } = await supabase
       .from('companies')
       .select('*')
       .order('name')
+    if (error) {
+      console.error('fetchCompanies:', error)
+      set({ loading: false, error: error.message })
+      return
+    }
     set({ companies: (data ?? []) as Company[], loading: false })
   },
 
@@ -40,7 +47,12 @@ export const useCompanyStore = create<CompanyState>((set, get) => ({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query = (supabase.from('employees') as any).select('*').order('name')
     if (companyId) query = query.eq('company_id', companyId)
-    const { data } = await query
+    const { data, error } = await query
+    if (error) {
+      console.error('fetchEmployees:', error)
+      set({ error: error.message })
+      return
+    }
     // Supabase returns numeric columns as strings — parse them
     const parsed = ((data ?? []) as Employee[]).map(e => ({
       ...e,
@@ -59,7 +71,12 @@ export const useCompanyStore = create<CompanyState>((set, get) => ({
       .insert({ ...data, user_id: user.id })
       .select()
       .single()
-    if (error || !created) return null
+    if (error) {
+      console.error('createCompany:', error)
+      set({ error: error.message })
+      return null
+    }
+    if (!created) return null
     const company = created as Company
     set(s => ({ companies: [...s.companies, company] }))
     return company
@@ -67,24 +84,34 @@ export const useCompanyStore = create<CompanyState>((set, get) => ({
 
   updateCompany: async (id, data) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updated } = await (supabase.from('companies') as any)
+    const { data: updated, error } = await (supabase.from('companies') as any)
       .update(data)
       .eq('id', id)
       .select()
       .single()
+    if (error) {
+      console.error('updateCompany:', error)
+      return { error: error.message }
+    }
     if (updated) {
       const company = updated as Company
       set(s => ({ companies: s.companies.map(c => c.id === id ? company : c) }))
       if (get().activeCompany?.id === id) set({ activeCompany: company })
     }
+    return { error: null }
   },
 
   deleteCompany: async (id) => {
-    await supabase.from('companies').delete().eq('id', id)
+    const { error } = await supabase.from('companies').delete().eq('id', id)
+    if (error) {
+      console.error('deleteCompany:', error)
+      return { error: error.message }
+    }
     set(s => ({
       companies: s.companies.filter(c => c.id !== id),
       activeCompany: s.activeCompany?.id === id ? null : s.activeCompany,
     }))
+    return { error: null }
   },
 
   createEmployee: async (data) => {
@@ -92,6 +119,7 @@ export const useCompanyStore = create<CompanyState>((set, get) => ({
     if (!user) return null
     
     // Ensure numeric fields are numbers, not strings
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const payload: any = {
       company_id:       data.company_id,
       name:             data.name,
@@ -119,7 +147,8 @@ export const useCompanyStore = create<CompanyState>((set, get) => ({
       .select()
       .single()
     if (error) {
-      console.error('Error creating employee:', error)
+      console.error('createEmployee:', error)
+      set({ error: error.message })
       return null
     }
     if (!created) return null
@@ -130,24 +159,34 @@ export const useCompanyStore = create<CompanyState>((set, get) => ({
 
   updateEmployee: async (id, data) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updated } = await (supabase.from('employees') as any)
+    const { data: updated, error } = await (supabase.from('employees') as any)
       .update(data)
       .eq('id', id)
       .select()
       .single()
+    if (error) {
+      console.error('updateEmployee:', error)
+      return { error: error.message }
+    }
     if (updated) {
       const employee = updated as Employee
       set(s => ({ employees: s.employees.map(e => e.id === id ? employee : e) }))
       if (get().activeEmployee?.id === id) set({ activeEmployee: employee })
     }
+    return { error: null }
   },
 
   deleteEmployee: async (id) => {
-    await supabase.from('employees').delete().eq('id', id)
+    const { error } = await supabase.from('employees').delete().eq('id', id)
+    if (error) {
+      console.error('deleteEmployee:', error)
+      return { error: error.message }
+    }
     set(s => ({
       employees: s.employees.filter(e => e.id !== id),
       activeEmployee: s.activeEmployee?.id === id ? null : s.activeEmployee,
     }))
+    return { error: null }
   },
 
   setActiveCompany:  (company)  => set({ activeCompany: company }),

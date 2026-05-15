@@ -98,6 +98,9 @@ export interface Database {
           template: number
           notes: string | null
           pdf_url: string | null
+          archived: boolean
+          archived_at: string | null
+          status: 'draft' | 'approved' | 'finalized'
           created_at: string
         }
         Insert: Omit<Database['public']['Tables']['payslips']['Row'], 'id' | 'created_at'>

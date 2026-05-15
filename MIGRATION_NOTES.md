@@ -51,7 +51,9 @@ Once the migration is applied:
 4. `004_roe.sql` - Record of Employment (ROE) tables
 5. `005_yearend_forms.sql` - T4A and T5 year-end forms
 6. `006_tax_constants.sql` - Tax constants table for admin management
-7. `007_add_bank_account.sql` - **NEW** Bank account field for employees
+7. `007_add_bank_account.sql` - Bank account field for employees
+8. `008_audit_log.sql` - **NEW** Audit trail for payslips, employees, companies (CRA compliance)
+9. `009_payslip_improvements.sql` - **NEW** Soft delete (archived flag) + payslip status workflow
 
 ## Verifying Migrations
 

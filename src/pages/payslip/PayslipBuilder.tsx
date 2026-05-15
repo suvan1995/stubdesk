@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCompanyStore } from '@/store/companyStore'
 import { useAuthStore } from '@/store/authStore'
-import { calculatePayslip, fmtCAD } from '@/lib/payrollEngine'
+import { calculatePayslip, fmtCAD, validatePayslipInputs } from '@/lib/payrollEngine'
 import { generatePayslipPDF, buildStoragePath } from '@/lib/pdfGenerator'
 import { calcPayDate, calcPeriodDates, fmtDisplay, detectCurrentPeriod } from '@/lib/dateUtils'
 import { supabase } from '@/lib/supabase'
+import { useToast } from '@/components/ui/Toast'
 import type { PayslipInputs, PayslipResult } from '@/types/payroll'
 import type { Company, Employee } from '@/types/database'
 import Select from '@/components/ui/Select'
@@ -29,6 +30,7 @@ export default function PayslipBuilder() {
   const navigate = useNavigate()
   const { companies, employees, fetchCompanies, fetchEmployees } = useCompanyStore()
   const { profile } = useAuthStore()
+  const { success, error: toastError, warning } = useToast()
 
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
@@ -208,8 +210,15 @@ export default function PayslipBuilder() {
   async function handleCalculate() {
     if (!selectedCompany || !selectedEmployee || !profile) return
     
-    // Calculate the payslip
+    // Validate inputs before calculating
     const inputs = buildInputs()
+    const validationErrors = validatePayslipInputs(inputs)
+    if (validationErrors.length > 0) {
+      toastError('Validation Error', validationErrors[0].message)
+      return
+    }
+
+    // Calculate the payslip
     const calculatedResult = calculatePayslip(inputs)
     setResult(calculatedResult)
     
@@ -281,11 +290,14 @@ export default function PayslipBuilder() {
         .from('payslips')
         .createSignedUrl(storagePath, 60 * 60 * 24 * 365 * 10)
       pdfUrl = signedData?.signedUrl ?? null
+    } else {
+      console.error('PDF upload error:', uploadError)
+      warning('PDF upload failed', 'Payslip will be saved without a PDF link.')
     }
 
     // Save payslip record with pdf_url
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase.from('payslips') as any).insert({
+    const { error: saveError } = await (supabase.from('payslips') as any).insert({
       user_id:           profile.id,
       company_id:        selectedCompany.id,
       employee_id:       selectedEmployee.id,
@@ -310,7 +322,13 @@ export default function PayslipBuilder() {
     })
 
     setSaving(false)
+    if (saveError) {
+      console.error('Save payslip error:', saveError)
+      toastError('Failed to save payslip', saveError.message)
+      return
+    }
     setSaved(true)
+    success('Payslip saved', `${selectedEmployee.name} · ${fmtDisplay(periodStart)}`)
     setStep(3)
   }
 

@@ -4,6 +4,7 @@ import { useCompanyStore } from '@/store/companyStore'
 import { useLimitsStore } from '@/store/limitsStore'
 import { canAddCompany, limitLabel } from '@/lib/planLimits'
 import { useForm } from 'react-hook-form'
+import { useToast } from '@/components/ui/Toast'
 import Modal from '@/components/ui/Modal'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
@@ -22,13 +23,22 @@ const PROVINCE_OPTIONS = [
   { value: 'BC', label: 'British Columbia (BC)' },
 ]
 
+// Validate CRA Business Number format: 9 digits + optional RT/RP/RC + 4 digits
+function isValidCRABN(bn: string): boolean {
+  if (!bn) return true // optional field
+  const cleaned = bn.replace(/\s/g, '')
+  return /^\d{9}(RT|RP|RC)\d{4}$/i.test(cleaned) || /^\d{9}$/.test(cleaned)
+}
+
 export default function CompaniesPage() {
   const navigate = useNavigate()
   const { companies, fetchCompanies, createCompany, updateCompany, deleteCompany } = useCompanyStore()
   const { limits } = useLimitsStore()
+  const { success, error: toastError } = useToast()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing,   setEditing]   = useState<Company | null>(null)
   const [logoData,  setLogoData]  = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>()
 
@@ -49,12 +59,23 @@ export default function CompaniesPage() {
   }
 
   async function onSubmit(data: FormData) {
-    if (editing) {
-      await updateCompany(editing.id, { ...data, logo_url: logoData ?? editing.logo_url })
-    } else {
-      await createCompany({ ...data, logo_url: logoData })
+    setSubmitting(true)
+    try {
+      if (editing) {
+        const { error } = await updateCompany(editing.id, { ...data, logo_url: logoData ?? editing.logo_url })
+        if (error) { toastError('Failed to update company', error); return }
+        success('Company updated')
+      } else {
+        const result = await createCompany({ ...data, logo_url: logoData })
+        if (!result) { toastError('Failed to create company', 'Please try again.'); return }
+        success('Company created')
+      }
+      setModalOpen(false)
+    } catch (err) {
+      toastError('Unexpected error', String(err))
+    } finally {
+      setSubmitting(false)
     }
-    setModalOpen(false)
   }
 
   function onLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -115,8 +136,11 @@ export default function CompaniesPage() {
               </div>
               <div className="flex gap-2 shrink-0">
                 <button className="btn-ghost text-xs py-1.5 px-3" onClick={() => openEdit(c)}>Edit</button>
-                <button className="btn-danger text-xs py-1.5 px-3" onClick={() => {
-                  if (confirm(`Delete ${c.name}?`)) deleteCompany(c.id)
+                <button className="btn-danger text-xs py-1.5 px-3" onClick={async () => {
+                  if (!confirm(`Delete ${c.name}? This will also delete all employees and payslips.`)) return
+                  const { error } = await deleteCompany(c.id)
+                  if (error) toastError('Failed to delete company', error)
+                  else success(`${c.name} deleted`)
                 }}>Delete</button>
               </div>
             </Card>
@@ -131,8 +155,8 @@ export default function CompaniesPage() {
         size="md"
         footer={
           <>
-            <button className="btn-primary" onClick={handleSubmit(onSubmit)}>
-              {editing ? 'Save Changes' : 'Create Company'}
+            <button className="btn-primary" onClick={handleSubmit(onSubmit)} disabled={submitting}>
+              {submitting ? 'Saving…' : editing ? 'Save Changes' : 'Create Company'}
             </button>
             <button className="btn-ghost" onClick={() => setModalOpen(false)}>Cancel</button>
           </>
@@ -145,7 +169,10 @@ export default function CompaniesPage() {
                 {...register('name', { required: 'Required' })} />
             </div>
             <Input label="CRA Business Number" placeholder="123456789 RT0001"
-              {...register('cra_bn')} />
+              error={errors.cra_bn?.message}
+              {...register('cra_bn', {
+                validate: v => !v || isValidCRABN(v) || 'Invalid BN format (e.g. 123456789RT0001)'
+              })} />
             <Input label="Street Address" required error={errors.street?.message}
               {...register('street', { required: 'Required' })} />
             <Input label="City" required error={errors.city?.message}

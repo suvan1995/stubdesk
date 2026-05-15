@@ -21,22 +21,25 @@ export const useLimitsStore = create<LimitsState>((set) => ({
   loading: false,
 
   fetchLimits: async (plan) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('plan_limits')
       .select('*')
       .eq('plan', plan)
       .single()
+    if (error) console.error('fetchLimits:', error)
     set({ limits: (data as PlanLimit | null) ?? DEFAULT_LIMITS[plan] ?? DEFAULT_LIMITS.free })
   },
 
   fetchAllLimits: async () => {
-    const { data } = await supabase.from('plan_limits').select('*').order('plan')
+    const { data, error } = await supabase.from('plan_limits').select('*').order('plan')
+    if (error) console.error('fetchAllLimits:', error)
     set({ allLimits: (data as PlanLimit[]) ?? Object.values(DEFAULT_LIMITS) })
   },
 
   fetchUsage: async (userId) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase.rpc as any)('payslips_this_month', { p_user_id: userId })
+    const { data, error } = await (supabase.rpc as any)('payslips_this_month', { p_user_id: userId })
+    if (error) console.error('fetchUsage:', error)
     set({ payslipsThisMonth: (data as number | null) ?? 0 })
   },
 

@@ -4,6 +4,7 @@ import { useCompanyStore } from '@/store/companyStore'
 import { useLimitsStore } from '@/store/limitsStore'
 import { canAddEmployee, limitLabel } from '@/lib/planLimits'
 import { useForm } from 'react-hook-form'
+import { useToast } from '@/components/ui/Toast'
 import Modal from '@/components/ui/Modal'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
@@ -28,9 +29,11 @@ export default function EmployeesPage() {
   const navigate = useNavigate()
   const { companies, employees, fetchCompanies, fetchEmployees, createEmployee, updateEmployee, deleteEmployee } = useCompanyStore()
   const { limits } = useLimitsStore()
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editing,   setEditing]   = useState<Employee | null>(null)
-  const [filterCo,  setFilterCo]  = useState('')
+  const { success, error: toastError } = useToast()
+  const [modalOpen,   setModalOpen]   = useState(false)
+  const [editing,     setEditing]     = useState<Employee | null>(null)
+  const [filterCo,    setFilterCo]    = useState('')
+  const [submitting,  setSubmitting]  = useState(false)
 
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<FormData>()
   const empType = watch('emp_type', 'salaried')
@@ -67,20 +70,23 @@ export default function EmployeesPage() {
 
   async function onSubmit(data: FormData) {
     const payload = { ...data, rate: Number(data.rate), std_weekly_hours: Number(data.std_weekly_hours), pay_frequency: Number(data.pay_frequency) as 52|26|24|12 }
+    setSubmitting(true)
     try {
       if (editing) {
-        await updateEmployee(editing.id, payload)
+        const { error } = await updateEmployee(editing.id, payload)
+        if (error) { toastError('Failed to update employee', error); return }
+        success('Employee updated')
       } else {
         const result = await createEmployee(payload)
-        if (!result) {
-          alert('Failed to create employee. Please check the console for errors.')
-          return
-        }
+        if (!result) { toastError('Failed to create employee', 'Check the console for details.'); return }
+        success('Employee created')
       }
       setModalOpen(false)
     } catch (err) {
       console.error('Error submitting employee:', err)
-      alert('An error occurred. Please try again.')
+      toastError('Unexpected error', String(err))
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -144,8 +150,11 @@ export default function EmployeesPage() {
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <button className="btn-ghost text-xs py-1.5 px-3" onClick={() => openEdit(emp)}>Edit</button>
-                  <button className="btn-danger text-xs py-1.5 px-3" onClick={() => {
-                    if (confirm(`Delete ${emp.name}?`)) deleteEmployee(emp.id)
+                  <button className="btn-danger text-xs py-1.5 px-3" onClick={async () => {
+                    if (!confirm(`Delete ${emp.name}?`)) return
+                    const { error } = await deleteEmployee(emp.id)
+                    if (error) toastError('Failed to delete employee', error)
+                    else success(`${emp.name} deleted`)
                   }}>Delete</button>
                 </div>
               </Card>
@@ -158,8 +167,8 @@ export default function EmployeesPage() {
         title={editing ? 'Edit Employee' : 'New Employee'} size="lg"
         footer={
           <>
-            <button className="btn-primary" onClick={handleSubmit(onSubmit)}>
-              {editing ? 'Save Changes' : 'Create Employee'}
+            <button className="btn-primary" onClick={handleSubmit(onSubmit)} disabled={submitting}>
+              {submitting ? 'Saving…' : editing ? 'Save Changes' : 'Create Employee'}
             </button>
             <button className="btn-ghost" onClick={() => setModalOpen(false)}>Cancel</button>
           </>

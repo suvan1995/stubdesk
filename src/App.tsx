@@ -66,15 +66,21 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       if (session) {
-        fetchProfile().then(() => {
-          const plan = useAuthStore.getState().profile?.plan ?? 'free'
-          fetchLimits(plan)
-          fetchUsage(session.user.id)
-          fetchConstants(2026)   // load live tax constants from DB
-          useAuthStore.setState({ loading: false })
-        })
+        fetchProfile()
+          .then(() => {
+            const plan = useAuthStore.getState().profile?.plan ?? 'free'
+            fetchLimits(plan)
+            fetchUsage(session.user.id)
+            fetchConstants(2026)
+          })
+          .catch((err) => {
+            console.error('App init fetchProfile failed:', err)
+          })
+          .finally(() => {
+            useAuthStore.setState({ loading: false })
+          })
       } else {
-        useAuthStore.setState({ loading: false })    // no session — done immediately
+        useAuthStore.setState({ loading: false })
       }
     }).catch(() => {
       useAuthStore.setState({ loading: false })
@@ -83,13 +89,18 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       if (session) {
-        fetchProfile().then(() => {
-          const plan = useAuthStore.getState().profile?.plan ?? 'free'
-          fetchLimits(plan)
-          fetchUsage(session.user.id)
-        })
+        fetchProfile()
+          .then(() => {
+            const plan = useAuthStore.getState().profile?.plan ?? 'free'
+            fetchLimits(plan)
+            fetchUsage(session.user.id)
+            fetchConstants(2026)
+          })
+          .catch((err) => {
+            console.error('onAuthStateChange fetchProfile failed:', err)
+          })
       } else {
-        useAuthStore.setState({ profile: null })
+        useAuthStore.setState({ profile: null, loading: false })
       }
     })
 

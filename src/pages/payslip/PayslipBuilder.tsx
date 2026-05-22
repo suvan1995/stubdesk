@@ -311,6 +311,12 @@ export default function PayslipBuilder() {
       logoDataURL:  selectedCompany.logo_url,
       taxDisplay,
       colorMode,
+      regularHours: selectedEmployee.emp_type === 'hourly'
+        ? (actualHours > 0 ? Math.max(0, actualHours - overtimeHrs) : selectedEmployee.std_weekly_hours * (52 / (selectedEmployee.pay_frequency || 26)))
+        : selectedEmployee.std_weekly_hours * (52 / (selectedEmployee.pay_frequency || 26)),
+      overtimeHours: overtimeHrs,
+      hourlyRate:   selectedEmployee.emp_type === 'hourly' ? parseFloat(String(selectedEmployee.rate)) || 0 : 0,
+      annualSalary: selectedEmployee.emp_type === 'salaried' ? parseFloat(String(selectedEmployee.rate)) || 0 : 0,
       ytdPrev: {
         gross:  ytdGross,
         vac:    ytdVac,
@@ -1085,6 +1091,12 @@ export default function PayslipBuilder() {
                   overtimeMult, notes, template, logoDataURL: selectedCompany.logo_url,
                   taxDisplay,
                   colorMode,
+                  regularHours: selectedEmployee.emp_type === 'hourly'
+                    ? (actualHours > 0 ? Math.max(0, actualHours - overtimeHrs) : selectedEmployee.std_weekly_hours * (52 / (selectedEmployee.pay_frequency || 26)))
+                    : selectedEmployee.std_weekly_hours * (52 / (selectedEmployee.pay_frequency || 26)),
+                  overtimeHours: overtimeHrs,
+                  hourlyRate:   selectedEmployee.emp_type === 'hourly' ? parseFloat(String(selectedEmployee.rate)) || 0 : 0,
+                  annualSalary: selectedEmployee.emp_type === 'salaried' ? parseFloat(String(selectedEmployee.rate)) || 0 : 0,
                   ytdPrev: {
                     gross:  ytdGross,
                     vac:    ytdVac,

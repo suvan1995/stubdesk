@@ -35,6 +35,11 @@ export interface PayslipPDFOptions {
   ytdPrev:      { gross: number; vac: number; cpp1: number; cpp2: number; ei: number; fed: number; prov: number; custom: number; net: number }
   taxDisplay:   'separate' | 'combined'
   colorMode:    'color' | 'bw'
+  // Hours & rate — shown in earnings table
+  regularHours:  number   // actual regular hours worked this period
+  overtimeHours: number   // overtime hours
+  hourlyRate:    number   // 0 for salaried
+  annualSalary:  number   // 0 for hourly
 }
 
 function fmtDateDisplay(str: string): string {
@@ -149,9 +154,16 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   y += infoH + 4
 
   // ── TABLE ─────────────────────────────────────────────────────
-  const labelW = fullW * 0.55
-  const amtW   = fullW * 0.225
+  const labelW = fullW * 0.38
+  const rateW  = fullW * 0.15
+  const hrsW   = fullW * 0.12
+  const amtW   = fullW * 0.175
   const rowH   = 6.5
+
+  // Helper: format hours display
+  const fmtHrs = (h: number) => h > 0 ? `${h.toFixed(1)} h` : '—'
+  const fmtRate = (r: number, isSalaried: boolean) =>
+    isSalaried ? `${fmtCAD(r)}/yr` : `${fmtCAD(r)}/hr`
 
   const sectionHead = (label: string) => {
     fr(margin, y, fullW, 6, sectionBg)
@@ -162,16 +174,26 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
     y += 6
   }
 
-  const tableRow = (label: string, period: number, ytd: number | null, bold: boolean, bg?: number[]) => {
+  const tableRow = (
+    label: string, rate: string, hours: string,
+    period: number, ytd: number | null,
+    bold: boolean, bg?: number[]
+  ) => {
     fr(margin, y, fullW, rowH, bg ?? white)
     sf(bold ? 'bold' : 'normal', 8.5, bold ? primary as number[] : black)
     tx(label, margin+3, y+4.5)
-    tx(fmtCAD(period), margin+labelW+amtW-3, y+4.5, { align: 'right' })
+    // Rate column
+    sf('normal', 7.5, gray as number[])
+    tx(rate, margin+labelW+rateW-2, y+4.5, { align: 'right' })
+    // Hours column
+    tx(hours, margin+labelW+rateW+hrsW-2, y+4.5, { align: 'right' })
+    // Amount column
+    sf(bold ? 'bold' : 'normal', 8.5, bold ? primary as number[] : black)
+    tx(fmtCAD(period), margin+labelW+rateW+hrsW+amtW-2, y+4.5, { align: 'right' })
+    // YTD column
     if (ytd !== null) {
       sf(bold ? 'bold' : 'normal', 8.5, bold ? primary as number[] : [100,100,100])
-      // YTD includes current period + prior periods
-      const ytdTotal = ytd + period
-      tx(fmtCAD(ytdTotal), margin+fullW-3, y+4.5, { align: 'right' })
+      tx(fmtCAD(ytd + period), margin+fullW-3, y+4.5, { align: 'right' })
     } else {
       sf('normal', 8.5, [180,180,180])
       tx('—', margin+fullW-3, y+4.5, { align: 'right' })
@@ -182,42 +204,56 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   // Column headers
   fr(margin, y, fullW, 7, tableHeader)
   sf('bold', 8, white as number[])
-  tx('DESCRIPTION', margin+3, y+5)
-  tx('THIS PERIOD', margin+labelW+amtW-3, y+5, { align: 'right' })
-  tx('YEAR TO DATE', margin+fullW-3, y+5, { align: 'right' })
+  tx('DESCRIPTION',  margin+3, y+5)
+  tx('RATE',         margin+labelW+rateW-2,           y+5, { align: 'right' })
+  tx('HOURS',        margin+labelW+rateW+hrsW-2,      y+5, { align: 'right' })
+  tx('THIS PERIOD',  margin+labelW+rateW+hrsW+amtW-2, y+5, { align: 'right' })
+  tx('YEAR TO DATE', margin+fullW-3,                  y+5, { align: 'right' })
   y += 7
   const tableTop = y - 7
 
+  // Derive hours/rate for display
+  const isSalaried = opts.employee.emp_type === 'salaried'
+  const dispRate   = isSalaried ? opts.annualSalary : opts.hourlyRate
+  const stdHrsPeriod = opts.employee.std_weekly_hours * (52 / (opts.employee.pay_frequency || 26))
+
   // Earnings
   sectionHead('Earnings')
-  tableRow('Regular Pay', result.regularPay, opts.ytdPrev.gross, false)
-  if (result.otPay > 0) tableRow(`Overtime Pay (${opts.overtimeMult}×)`, result.otPay, null, false)
-  result.extraLines.forEach(e => tableRow(e.label, e.amount, null, false))
-  // Always show vacation pay line, even when included
+  tableRow('Regular Pay',
+    fmtRate(dispRate, isSalaried),
+    isSalaried ? `${stdHrsPeriod.toFixed(1)} h` : fmtHrs(opts.regularHours || stdHrsPeriod),
+    result.regularPay, opts.ytdPrev.gross, false)
+  if (result.otPay > 0)
+    tableRow(`Overtime Pay (${opts.overtimeMult}×)`,
+      `${fmtCAD(opts.hourlyRate * opts.overtimeMult)}/hr`,
+      fmtHrs(opts.overtimeHours),
+      result.otPay, null, false)
+  result.extraLines.forEach(e => tableRow(e.label, '—', '—', e.amount, null, false))
   if (opts.vacType === 'included') {
-    tableRow(`Vacation Pay (${opts.vacRate}% - included in rate)`, 0, 0, false)
+    tableRow(`Vacation Pay (${opts.vacRate}% - included in rate)`, '—', '—', 0, 0, false)
   } else if (result.vacPay > 0) {
-    tableRow(`Vacation Pay (${opts.vacRate}%)`, result.vacPay, opts.ytdPrev.vac, false)
+    tableRow(`Vacation Pay (${opts.vacRate}%)`, `${opts.vacRate}%`, '—', result.vacPay, opts.ytdPrev.vac, false)
   }
-  tableRow('Gross Pay', result.totalGross, opts.ytdPrev.gross + opts.ytdPrev.vac, true, rowHL)
+  tableRow('Gross Pay', '', '', result.totalGross, opts.ytdPrev.gross + opts.ytdPrev.vac, true, rowHL)
 
   // Deductions
   sectionHead('Statutory Deductions')
-  tableRow('CPP', result.cpp1, opts.ytdPrev.cpp1, false)
-  if (result.cpp2 > 0) tableRow('CPP2', result.cpp2, opts.ytdPrev.cpp2, false)
-  tableRow('EI', result.eiEmployee, opts.ytdPrev.ei, false)
+  tableRow('CPP',  '—', '—', result.cpp1, opts.ytdPrev.cpp1, false)
+  if (result.cpp2 > 0) tableRow('CPP2', '—', '—', result.cpp2, opts.ytdPrev.cpp2, false)
+  tableRow('EI',   '—', '—', result.eiEmployee, opts.ytdPrev.ei, false)
   if (opts.taxDisplay === 'separate') {
-    tableRow('Federal Tax', result.fedTax, opts.ytdPrev.fed, false)
-    tableRow(`Provincial Tax (${company.province})`, result.provTax, opts.ytdPrev.prov, false)
+    tableRow('Federal Tax',                        '—', '—', result.fedTax,  opts.ytdPrev.fed,  false)
+    tableRow(`Provincial Tax (${company.province})`, '—', '—', result.provTax, opts.ytdPrev.prov, false)
   } else {
-    tableRow('Income Tax', result.fedTax + result.provTax, opts.ytdPrev.fed + opts.ytdPrev.prov, false)
+    tableRow('Income Tax', '—', '—', result.fedTax + result.provTax, opts.ytdPrev.fed + opts.ytdPrev.prov, false)
   }
-  tableRow('Total Statutory Deductions', result.totalDeductions, opts.ytdPrev.cpp1 + opts.ytdPrev.cpp2 + opts.ytdPrev.ei + opts.ytdPrev.fed + opts.ytdPrev.prov, true, rowHL)
+  tableRow('Total Statutory Deductions', '', '', result.totalDeductions,
+    opts.ytdPrev.cpp1 + opts.ytdPrev.cpp2 + opts.ytdPrev.ei + opts.ytdPrev.fed + opts.ytdPrev.prov, true, rowHL)
 
   if (result.customDeductLines.length > 0) {
     sectionHead('Other Deductions')
-    result.customDeductLines.forEach(d => tableRow(d.label, d.amount, null, false))
-    tableRow('Total Other Deductions', result.customDeductTotal, opts.ytdPrev.custom, true, rowHL)
+    result.customDeductLines.forEach(d => tableRow(d.label, '—', '—', d.amount, null, false))
+    tableRow('Total Other Deductions', '', '', result.customDeductTotal, opts.ytdPrev.custom, true, rowHL)
   }
 
   // Table border
@@ -562,24 +598,35 @@ function generateQuickBooksStyle(opts: PayslipPDFOptions): Blob {
   y += 3; rule(y); y += 6
 
   // ── Earnings & Deductions Table with YTD ─────────────────────────────────
-  const labelW = 70
-  const amtW = 30
-  const ytdW = 30
-  const rowH = 6
+  const labelW = 55
+  const rateW2 = 22
+  const hrsW2  = 18
+  const amtW   = 25
+  const ytdW   = 28
+  const rowH   = 6
 
-  const tableRow = (label: string, period: number, ytd: number | null, bold: boolean) => {
+  const fmtHrs2  = (h: number) => h > 0 ? `${h.toFixed(1)}h` : '—'
+  const isSal6   = opts.employee.emp_type === 'salaried'
+  const dispRate6 = isSal6 ? opts.annualSalary : opts.hourlyRate
+  const stdHrs6   = opts.employee.std_weekly_hours * (52 / (opts.employee.pay_frequency || 26))
+
+  const tableRow = (label: string, rate: string, hours: string, period: number, ytd: number | null, bold: boolean) => {
     fr(mg, y, fw, rowH, bold ? lgray : (y % 12 < 6 ? white : altbg))
     sf(bold ? 'bold' : 'normal', 8, bold ? black : dgray)
     tx(label, mg + 2, y + 4)
+    sf('normal', 7, mgray)
+    if (!bold) {
+      tx(rate,  mg + labelW + rateW2 - 1, y + 4, { align: 'right' })
+      tx(hours, mg + labelW + rateW2 + hrsW2 - 1, y + 4, { align: 'right' })
+    }
     sf(bold ? 'bold' : 'normal', 8, black)
-    tx(fmtCAD(period), mg + labelW + amtW - 2, y + 4, { align: 'right' })
+    tx(fmtCAD(period), mg + labelW + rateW2 + hrsW2 + amtW - 1, y + 4, { align: 'right' })
     if (ytd !== null) {
       sf(bold ? 'bold' : 'normal', 8, mgray)
-      const ytdTotal = ytd + period
-      tx(fmtCAD(ytdTotal), mg + labelW + amtW + ytdW - 2, y + 4, { align: 'right' })
+      tx(fmtCAD(ytd + period), mg + labelW + rateW2 + hrsW2 + amtW + ytdW - 1, y + 4, { align: 'right' })
     } else {
       sf('normal', 8, [200,200,200] as [number,number,number])
-      tx('—', mg + labelW + amtW + ytdW - 2, y + 4, { align: 'right' })
+      tx('—', mg + labelW + rateW2 + hrsW2 + amtW + ytdW - 1, y + 4, { align: 'right' })
     }
     y += rowH
   }
@@ -593,41 +640,51 @@ function generateQuickBooksStyle(opts: PayslipPDFOptions): Blob {
 
   // Column headers
   fr(mg, y, fw, 7, green)
-  sf('bold', 7.5, white)
-  tx('DESCRIPTION', mg + 2, y + 5)
-  tx('THIS PERIOD', mg + labelW + amtW - 2, y + 5, { align: 'right' })
-  tx('YEAR TO DATE', mg + labelW + amtW + ytdW - 2, y + 5, { align: 'right' })
+  sf('bold', 7, white)
+  tx('DESCRIPTION',  mg + 2, y + 5)
+  tx('RATE',         mg + labelW + rateW2 - 1,                    y + 5, { align: 'right' })
+  tx('HRS',          mg + labelW + rateW2 + hrsW2 - 1,            y + 5, { align: 'right' })
+  tx('THIS PERIOD',  mg + labelW + rateW2 + hrsW2 + amtW - 1,     y + 5, { align: 'right' })
+  tx('YEAR TO DATE', mg + labelW + rateW2 + hrsW2 + amtW + ytdW - 1, y + 5, { align: 'right' })
   y += 7
 
   // Earnings
   sectionHead('Earnings')
-  tableRow('Regular Pay', result.regularPay, opts.ytdPrev.gross, false)
-  if (result.otPay > 0) tableRow(`Overtime Pay (${opts.overtimeMult}×)`, result.otPay, null, false)
-  result.extraLines.forEach(e => tableRow(e.label, e.amount, null, false))
+  tableRow('Regular Pay',
+    isSal6 ? `${fmtCAD(dispRate6)}/yr` : `${fmtCAD(dispRate6)}/hr`,
+    isSal6 ? `${stdHrs6.toFixed(1)}h` : fmtHrs2(opts.regularHours || stdHrs6),
+    result.regularPay, opts.ytdPrev.gross, false)
+  if (result.otPay > 0)
+    tableRow(`Overtime (${opts.overtimeMult}×)`,
+      `${fmtCAD(opts.hourlyRate * opts.overtimeMult)}/hr`,
+      fmtHrs2(opts.overtimeHours),
+      result.otPay, null, false)
+  result.extraLines.forEach(e => tableRow(e.label, '—', '—', e.amount, null, false))
   if (opts.vacType === 'included') {
-    tableRow(`Vacation Pay (${opts.vacRate}% - included in rate)`, 0, 0, false)
+    tableRow(`Vacation Pay (${opts.vacRate}% incl.)`, '—', '—', 0, 0, false)
   } else if (result.vacPay > 0) {
-    tableRow(`Vacation Pay (${opts.vacRate}%)`, result.vacPay, opts.ytdPrev.vac, false)
+    tableRow(`Vacation Pay (${opts.vacRate}%)`, `${opts.vacRate}%`, '—', result.vacPay, opts.ytdPrev.vac, false)
   }
-  tableRow('Gross Pay', result.totalGross, opts.ytdPrev.gross + opts.ytdPrev.vac, true)
+  tableRow('Gross Pay', '', '', result.totalGross, opts.ytdPrev.gross + opts.ytdPrev.vac, true)
 
   // Deductions
   sectionHead('Statutory Deductions')
-  tableRow('CPP', result.cpp1, opts.ytdPrev.cpp1, false)
-  if (result.cpp2 > 0) tableRow('CPP2', result.cpp2, opts.ytdPrev.cpp2, false)
-  tableRow('EI', result.eiEmployee, opts.ytdPrev.ei, false)
+  tableRow('CPP',  '—', '—', result.cpp1, opts.ytdPrev.cpp1, false)
+  if (result.cpp2 > 0) tableRow('CPP2', '—', '—', result.cpp2, opts.ytdPrev.cpp2, false)
+  tableRow('EI',   '—', '—', result.eiEmployee, opts.ytdPrev.ei, false)
   if (opts.taxDisplay === 'separate') {
-    tableRow('Federal Tax', result.fedTax, opts.ytdPrev.fed, false)
-    tableRow(`Provincial Tax (${company.province})`, result.provTax, opts.ytdPrev.prov, false)
+    tableRow('Federal Tax',                          '—', '—', result.fedTax,  opts.ytdPrev.fed,  false)
+    tableRow(`Provincial Tax (${company.province})`, '—', '—', result.provTax, opts.ytdPrev.prov, false)
   } else {
-    tableRow('Income Tax', result.fedTax + result.provTax, opts.ytdPrev.fed + opts.ytdPrev.prov, false)
+    tableRow('Income Tax', '—', '—', result.fedTax + result.provTax, opts.ytdPrev.fed + opts.ytdPrev.prov, false)
   }
-  tableRow('Total Statutory Deductions', result.totalDeductions, opts.ytdPrev.cpp1 + opts.ytdPrev.cpp2 + opts.ytdPrev.ei + opts.ytdPrev.fed + opts.ytdPrev.prov, true)
+  tableRow('Total Statutory Deductions', '', '', result.totalDeductions,
+    opts.ytdPrev.cpp1 + opts.ytdPrev.cpp2 + opts.ytdPrev.ei + opts.ytdPrev.fed + opts.ytdPrev.prov, true)
 
   if (result.customDeductLines.length > 0) {
     sectionHead('Other Deductions')
-    result.customDeductLines.forEach(d => tableRow(d.label, d.amount, null, false))
-    tableRow('Total Other Deductions', result.customDeductTotal, opts.ytdPrev.custom, true)
+    result.customDeductLines.forEach(d => tableRow(d.label, '—', '—', d.amount, null, false))
+    tableRow('Total Other Deductions', '', '', result.customDeductTotal, opts.ytdPrev.custom, true)
   }
 
   // Table border
@@ -756,33 +813,45 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
   y += 4
 
   // ── Table header ─────────────────────────────────────────────────────────
-  const descW = fw * 0.50
-  const perW  = fw * 0.25
-  const rowH  = 6.5
+  const descW = fw * 0.38
+  const rateW7 = fw * 0.14
+  const hrsW7  = fw * 0.10
+  const perW   = fw * 0.19
+  const rowH   = 6.5
+
+  const fmtHrs7   = (h: number) => h > 0 ? `${h.toFixed(1)}h` : '—'
+  const isSal7    = opts.employee.emp_type === 'salaried'
+  const dispRate7 = isSal7 ? opts.annualSalary : opts.hourlyRate
+  const stdHrs7   = opts.employee.std_weekly_hours * (52 / (opts.employee.pay_frequency || 26))
 
   fr(mg, y, fw, 7, teal)
   sf('bold', 7.5, white)
-  tx('DESCRIPTION', mg + 3, y + 5)
-  tx('THIS PERIOD', mg + descW + perW - 3, y + 5, { align: 'right' })
-  tx('YEAR TO DATE', mg + fw - 3, y + 5, { align: 'right' })
+  tx('DESCRIPTION',  mg + 3,                                    y + 5)
+  tx('RATE',         mg + descW + rateW7 - 2,                   y + 5, { align: 'right' })
+  tx('HRS',          mg + descW + rateW7 + hrsW7 - 2,           y + 5, { align: 'right' })
+  tx('THIS PERIOD',  mg + descW + rateW7 + hrsW7 + perW - 2,    y + 5, { align: 'right' })
+  tx('YEAR TO DATE', mg + fw - 3,                               y + 5, { align: 'right' })
   y += 7
 
   // ── Table rows helper ─────────────────────────────────────────────────────
   let rowIdx = 0
-  function tableRow(label: string, period: number, ytd: number | null, bold = false) {
+  function tableRow(label: string, rate: string, hours: string, period: number, ytd: number | null, bold = false) {
     const bg = bold ? (opts.colorMode === 'bw' ? [235,235,235] as [number,number,number] : [232,238,245] as [number,number,number]) : (rowIdx % 2 === 0 ? white : altbg)
     fr(mg, y, fw, rowH, bg)
     doc.setDrawColor(...lgray); doc.setLineWidth(0.15)
     doc.line(mg, y + rowH, mg + fw, y + rowH)
     sf(bold ? 'bold' : 'normal', 8, bold ? navy : dgray)
     tx(label, mg + 3, y + 4.5)
+    if (!bold) {
+      sf('normal', 7, mgray)
+      tx(rate,  mg + descW + rateW7 - 2,         y + 4.5, { align: 'right' })
+      tx(hours, mg + descW + rateW7 + hrsW7 - 2, y + 4.5, { align: 'right' })
+    }
     sf(bold ? 'bold' : 'normal', 8, bold ? navy : black)
-    tx(fmtCAD(period), mg + descW + perW - 3, y + 4.5, { align: 'right' })
+    tx(fmtCAD(period), mg + descW + rateW7 + hrsW7 + perW - 2, y + 4.5, { align: 'right' })
     if (ytd !== null) {
       sf(bold ? 'bold' : 'normal', 8, bold ? navy : mgray)
-      // YTD includes current period + prior periods
-      const ytdTotal = ytd + period
-      tx(fmtCAD(ytdTotal), mg + fw - 3, y + 4.5, { align: 'right' })
+      tx(fmtCAD(ytd + period), mg + fw - 3, y + 4.5, { align: 'right' })
     } else {
       sf('normal', 8, [200,200,200] as [number,number,number])
       tx('—', mg + fw - 3, y + 4.5, { align: 'right' })
@@ -797,34 +866,41 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
 
   // Earnings
   sectionHead('Earnings')
-  tableRow('Regular Pay', result.regularPay, opts.ytdPrev.gross)
-  if (result.otPay > 0) tableRow(`Overtime Pay (${opts.overtimeMult}×)`, result.otPay, null)
-  result.extraLines.forEach(e => tableRow(e.label, e.amount, null))
-  // Always show vacation pay line, even when included
+  tableRow('Regular Pay',
+    isSal7 ? `${fmtCAD(dispRate7)}/yr` : `${fmtCAD(dispRate7)}/hr`,
+    isSal7 ? `${stdHrs7.toFixed(1)}h` : fmtHrs7(opts.regularHours || stdHrs7),
+    result.regularPay, opts.ytdPrev.gross)
+  if (result.otPay > 0)
+    tableRow(`Overtime Pay (${opts.overtimeMult}×)`,
+      `${fmtCAD(opts.hourlyRate * opts.overtimeMult)}/hr`,
+      fmtHrs7(opts.overtimeHours),
+      result.otPay, null)
+  result.extraLines.forEach(e => tableRow(e.label, '—', '—', e.amount, null))
   if (opts.vacType === 'included') {
-    tableRow(`Vacation Pay (${opts.vacRate}% - included in rate)`, 0, 0)
+    tableRow(`Vacation Pay (${opts.vacRate}% incl.)`, '—', '—', 0, 0)
   } else if (result.vacPay > 0) {
-    tableRow(`Vacation Pay (${opts.vacRate}%)`, result.vacPay, opts.ytdPrev.vac)
+    tableRow(`Vacation Pay (${opts.vacRate}%)`, `${opts.vacRate}%`, '—', result.vacPay, opts.ytdPrev.vac)
   }
-  tableRow('Gross Pay', result.totalGross, opts.ytdPrev.gross + opts.ytdPrev.vac, true)
+  tableRow('Gross Pay', '', '', result.totalGross, opts.ytdPrev.gross + opts.ytdPrev.vac, true)
 
   // Deductions
   sectionHead('Statutory Deductions')
-  tableRow('CPP', result.cpp1, opts.ytdPrev.cpp1)
-  if (result.cpp2 > 0) tableRow('CPP2', result.cpp2, opts.ytdPrev.cpp2)
-  tableRow('EI', result.eiEmployee, opts.ytdPrev.ei)
+  tableRow('CPP',  '—', '—', result.cpp1, opts.ytdPrev.cpp1)
+  if (result.cpp2 > 0) tableRow('CPP2', '—', '—', result.cpp2, opts.ytdPrev.cpp2)
+  tableRow('EI',   '—', '—', result.eiEmployee, opts.ytdPrev.ei)
   if (opts.taxDisplay === 'separate') {
-    tableRow('Federal Tax', result.fedTax, opts.ytdPrev.fed)
-    tableRow(`Provincial Tax (${company.province})`, result.provTax, opts.ytdPrev.prov)
+    tableRow('Federal Tax',                          '—', '—', result.fedTax,  opts.ytdPrev.fed)
+    tableRow(`Provincial Tax (${company.province})`, '—', '—', result.provTax, opts.ytdPrev.prov)
   } else {
-    tableRow('Income Tax', result.fedTax + result.provTax, opts.ytdPrev.fed + opts.ytdPrev.prov)
+    tableRow('Income Tax', '—', '—', result.fedTax + result.provTax, opts.ytdPrev.fed + opts.ytdPrev.prov)
   }
-  tableRow('Total Statutory Deductions', result.totalDeductions, opts.ytdPrev.cpp1 + opts.ytdPrev.cpp2 + opts.ytdPrev.ei + opts.ytdPrev.fed + opts.ytdPrev.prov, true)
+  tableRow('Total Statutory Deductions', '', '', result.totalDeductions,
+    opts.ytdPrev.cpp1 + opts.ytdPrev.cpp2 + opts.ytdPrev.ei + opts.ytdPrev.fed + opts.ytdPrev.prov, true)
 
   if (result.customDeductLines.length > 0) {
     sectionHead('Other Deductions')
-    result.customDeductLines.forEach(d => tableRow(d.label, d.amount, null))
-    tableRow('Total Other Deductions', result.customDeductTotal, opts.ytdPrev.custom, true)
+    result.customDeductLines.forEach(d => tableRow(d.label, '—', '—', d.amount, null))
+    tableRow('Total Other Deductions', '', '', result.customDeductTotal, opts.ytdPrev.custom, true)
   }
 
   // Outer table border

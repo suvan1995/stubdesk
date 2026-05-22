@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useCompanyStore } from '@/store/companyStore'
 import { useAuthStore } from '@/store/authStore'
 import { calculatePayslip, fmtCAD, validatePayslipInputs, estimateYTD } from '@/lib/payrollEngine'
-import { generatePayslipPDF, buildStoragePath } from '@/lib/pdfGenerator'
+import { generatePayslipPDF } from '@/lib/pdfGenerator'
 import { calcPayDate, calcPeriodDates, fmtDisplay, detectCurrentPeriod } from '@/lib/dateUtils'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast'
@@ -30,7 +30,7 @@ export default function PayslipBuilder() {
   const navigate = useNavigate()
   const { companies, employees, fetchCompanies, fetchEmployees } = useCompanyStore()
   const { profile } = useAuthStore()
-  const { success, error: toastError, warning } = useToast()
+  const { success, error: toastError } = useToast()
 
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
@@ -83,6 +83,8 @@ export default function PayslipBuilder() {
   // Tracks whether YTDs were auto-filled from DB (true) or are still at zero with no DB history (false)
   const [ytdAutoFilled, setYtdAutoFilled] = useState(false)
   const [ytdEstimated,  setYtdEstimated]  = useState(false)
+  // Whether to exclude archived payslips from YTD auto-fill
+  const [ytdExcludeArchived, setYtdExcludeArchived] = useState(true)
 
   useEffect(() => {
     fetchCompanies()
@@ -117,11 +119,14 @@ export default function PayslipBuilder() {
 
     // 2. Fetch all saved payslips for this employee this year
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(supabase.from('payslips') as any)
+    let ytdQuery = (supabase.from('payslips') as any)
       .select('gross_pay,vac_pay,cpp1,cpp2,ei,fed_tax,prov_tax,net_pay,custom_deductions,pay_date,period_start')
       .eq('employee_id', selectedEmployee.id)
       .eq('company_id', selectedCompany.id)
-      .then(({ data }: { data: any[] | null }) => {
+    if (ytdExcludeArchived) {
+      ytdQuery = ytdQuery.eq('archived', false)
+    }
+    ytdQuery.then(({ data }: { data: any[] | null }) => {
         if (!data || data.length === 0) {
           setYtdAutoFilled(false)
           return
@@ -153,7 +158,7 @@ export default function PayslipBuilder() {
         setYtdCustom(customTotal)
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedEmployee?.id, selectedCompany?.id])
+  }, [selectedEmployee?.id, selectedCompany?.id, ytdExcludeArchived])
 
   // Auto-calculate dates when in auto mode
   useEffect(() => {
@@ -277,86 +282,10 @@ export default function PayslipBuilder() {
     const calculatedResult = calculatePayslip(inputs)
     setResult(calculatedResult)
     
-    // Auto-save to cloud
+    // Auto-save record to DB (no PDF upload — user generates PDF on demand)
     setSaving(true)
 
-    // Split combined tax YTD if needed
-    let ytdFedToUse = ytdFed
-    let ytdProvToUse = ytdProv
-    if (ytdTaxMode === 'combined' && ytdFed > 0) {
-      const totalCurrentTax = calculatedResult.fedTax + calculatedResult.provTax
-      if (totalCurrentTax > 0) {
-        const fedRatio = calculatedResult.fedTax / totalCurrentTax
-        ytdFedToUse = ytdFed * fedRatio
-        ytdProvToUse = ytdFed * (1 - fedRatio)
-      }
-    }
-
-    // Generate PDF blob
-    const pdfBlob = generatePayslipPDF({
-      result: calculatedResult,
-      company:      selectedCompany,
-      employee:     selectedEmployee,
-      periodStart,
-      periodEnd,
-      payDate,
-      payMethod,
-      chequeNumber: chequeNum,
-      chequeDate,
-      vacType,
-      vacRate,
-      overtimeMult,
-      notes,
-      template,
-      logoDataURL:  selectedCompany.logo_url,
-      taxDisplay,
-      colorMode,
-      regularHours: selectedEmployee.emp_type === 'hourly'
-        ? (actualHours > 0 ? Math.max(0, actualHours - overtimeHrs) : selectedEmployee.std_weekly_hours * (52 / (selectedEmployee.pay_frequency || 26)))
-        : selectedEmployee.std_weekly_hours * (52 / (selectedEmployee.pay_frequency || 26)),
-      overtimeHours: overtimeHrs,
-      hourlyRate:   selectedEmployee.emp_type === 'hourly' ? parseFloat(String(selectedEmployee.rate)) || 0 : 0,
-      annualSalary: selectedEmployee.emp_type === 'salaried' ? parseFloat(String(selectedEmployee.rate)) || 0 : 0,
-      ytdPrev: {
-        gross:  ytdGross,
-        vac:    ytdVac,
-        cpp1:   ytdCpp1,
-        cpp2:   ytdCpp2,
-        ei:     ytdEi,
-        fed:    ytdFedToUse,
-        prov:   ytdProvToUse,
-        custom: ytdCustom,
-        net:    ytdNet,
-      },
-    })
-
-    // Upload to Supabase Storage
-    const storagePath = buildStoragePath(
-      profile.id,
-      selectedCompany.name,
-      selectedEmployee.name,
-      periodStart
-    )
-
-    let pdfUrl: string | null = null
-    const { error: uploadError } = await supabase.storage
-      .from('payslips')
-      .upload(storagePath, pdfBlob, {
-        contentType: 'application/pdf',
-        upsert: true,
-      })
-
-    if (!uploadError) {
-      const { data: signedData } = await supabase.storage
-        .from('payslips')
-        .createSignedUrl(storagePath, 60 * 60 * 24 * 365 * 10)
-      pdfUrl = signedData?.signedUrl ?? null
-    } else {
-      console.error('PDF upload error:', uploadError)
-      warning('PDF upload failed', 'Payslip will be saved without a PDF link.')
-    }
-
-    // Save payslip record with pdf_url
+    // Save payslip record (no PDF stored in cloud — generated on demand)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: saveError } = await (supabase.from('payslips') as any).insert({
       user_id:           profile.id,
@@ -379,7 +308,7 @@ export default function PayslipBuilder() {
       vac_pay:           calculatedResult.vacPay,
       template,
       notes:             notes || null,
-      pdf_url:           pdfUrl,
+      pdf_url:           null,
     })
 
     setSaving(false)
@@ -722,6 +651,28 @@ export default function PayslipBuilder() {
               {selectedEmployee?.start_date ? ` and employment start date (${fmtDisplay(selectedEmployee.start_date)})` : ''}.
               Edit any field manually if needed.
             </p>
+
+            {/* Archived exclusion toggle */}
+            <div className="flex items-center gap-3 mb-3 p-2.5 bg-gray-50 rounded-lg">
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                <input type="checkbox" className="sr-only peer" checked={ytdExcludeArchived}
+                  onChange={e => {
+                    setYtdExcludeArchived(e.target.checked)
+                    // Reset so the useEffect re-fetches with new filter
+                    setYtdAutoFilled(false)
+                    setYtdEstimated(false)
+                  }} />
+                <div className="w-9 h-5 bg-gray-300 peer-checked:bg-brand-600 rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+              </label>
+              <div>
+                <span className="text-xs font-medium text-gray-700">Exclude archived payslips from YTD</span>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {ytdExcludeArchived
+                    ? 'Archived payslips are excluded — YTD reflects only active records.'
+                    : 'All payslips included — archived records count toward YTD totals.'}
+                </p>
+              </div>
+            </div>
 
             {/* ── Warning: first payslip in app but not period 1 ── */}
             {!ytdAutoFilled && periodNumber > 1 && (

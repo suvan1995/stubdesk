@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCompanyStore } from '@/store/companyStore'
 import { useAuthStore } from '@/store/authStore'
-import { calculatePayslip, fmtCAD, validatePayslipInputs } from '@/lib/payrollEngine'
+import { calculatePayslip, fmtCAD, validatePayslipInputs, estimateYTD } from '@/lib/payrollEngine'
 import { generatePayslipPDF, buildStoragePath } from '@/lib/pdfGenerator'
 import { calcPayDate, calcPeriodDates, fmtDisplay, detectCurrentPeriod } from '@/lib/dateUtils'
 import { supabase } from '@/lib/supabase'
@@ -82,6 +82,7 @@ export default function PayslipBuilder() {
   const [ytdTaxMode, setYtdTaxMode] = useState<'separate' | 'combined'>('separate')
   // Tracks whether YTDs were auto-filled from DB (true) or are still at zero with no DB history (false)
   const [ytdAutoFilled, setYtdAutoFilled] = useState(false)
+  const [ytdEstimated,  setYtdEstimated]  = useState(false)
 
   useEffect(() => {
     fetchCompanies()
@@ -110,6 +111,7 @@ export default function PayslipBuilder() {
     setAnchorWarning(info.anchorWarning ?? false)
     // Reset YTD state when employee changes
     setYtdAutoFilled(false)
+    setYtdEstimated(false)
     setYtdGross(0); setYtdVac(0); setYtdCpp1(0); setYtdCpp2(0)
     setYtdEi(0); setYtdFed(0); setYtdProv(0); setYtdCustom(0); setYtdNet(0)
 
@@ -171,6 +173,46 @@ export default function PayslipBuilder() {
       setPayDate(pd)
     }
   }, [periodEnd, payDateOffset, selectedCompany, autoDate])
+
+  const [ytdEstimating, setYtdEstimating] = useState(false)
+
+  function handleEstimateYTD() {
+    if (!selectedEmployee || !selectedCompany || periodNumber <= 1) return
+    setYtdEstimating(true)
+
+    const emp = selectedEmployee
+    const rate        = parseFloat(String(emp.rate))             || 0
+    const stdHours    = parseFloat(String(emp.std_weekly_hours)) || 40
+    const payFreq     = parseInt(String(emp.pay_frequency))      || 26
+
+    // Run simulation in a microtask so the spinner renders first
+    setTimeout(() => {
+      const estimate = estimateYTD(
+        periodNumber - 1,          // prior periods
+        selectedCompany.province,
+        emp.emp_type,
+        emp.emp_type === 'salaried' ? rate : 0,
+        emp.emp_type === 'hourly'   ? rate : 0,
+        stdHours,
+        payFreq as 52 | 26 | 24 | 12,
+        vacType,
+        vacRate,
+      )
+
+      setYtdGross(estimate.gross)
+      setYtdVac(estimate.vac)
+      setYtdCpp1(estimate.cpp1)
+      setYtdCpp2(estimate.cpp2)
+      setYtdEi(estimate.ei)
+      setYtdFed(estimate.fed)
+      setYtdProv(estimate.prov)
+      setYtdNet(estimate.net)
+      setYtdCustom(0)
+      setYtdAutoFilled(true)
+      setYtdEstimated(true)
+      setYtdEstimating(false)
+    }, 50)
+  }
 
   function buildInputs(): PayslipInputs {
     const emp = selectedEmployee!
@@ -680,7 +722,7 @@ export default function PayslipBuilder() {
               <div className="mb-4 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3">
                 <div className="flex items-start gap-2">
                   <span className="text-amber-500 text-lg leading-none mt-0.5">⚠</span>
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm font-semibold text-amber-800">
                       This appears to be period {periodNumber} — but no prior payslips were found in StubDesk.
                     </p>
@@ -692,6 +734,21 @@ export default function PayslipBuilder() {
                     <p className="text-xs text-amber-600 mt-1.5 font-medium">
                       Where to find these numbers: your previous payroll system's YTD report, or the employee's last pay stub from this year.
                     </p>
+                    <div className="mt-3 flex items-center gap-3 flex-wrap">
+                      <button
+                        className="btn-primary text-xs py-1.5 px-3"
+                        onClick={handleEstimateYTD}
+                        disabled={ytdEstimating}
+                      >
+                        {ytdEstimating
+                          ? '⏳ Estimating…'
+                          : `⚡ Auto-Estimate YTD (${periodNumber - 1} prior period${periodNumber - 1 !== 1 ? 's' : ''})`}
+                      </button>
+                      <span className="text-xs text-amber-600">
+                        Uses this employee's standard pay settings to simulate prior periods.
+                        Review and adjust if actual pay differed.
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -702,8 +759,19 @@ export default function PayslipBuilder() {
               <div className="mb-3 bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center gap-2">
                 <span className="text-green-500 text-sm">✓</span>
                 <p className="text-xs text-green-700">
-                  YTD values auto-filled from {periodNumber - 1} prior payslip{periodNumber - 1 !== 1 ? 's' : ''} saved in StubDesk this year.
+                  {ytdEstimated
+                    ? `YTD values estimated by simulating ${periodNumber - 1} prior period${periodNumber - 1 !== 1 ? 's' : ''} using this employee's standard pay. Review and adjust if actual pay differed (bonuses, OT, etc.).`
+                    : `YTD values auto-filled from ${periodNumber - 1} prior payslip${periodNumber - 1 !== 1 ? 's' : ''} saved in StubDesk this year.`
+                  }
                 </p>
+                {ytdEstimated && (
+                  <button
+                    className="text-xs text-amber-600 hover:underline shrink-0 ml-auto"
+                    onClick={() => { setYtdAutoFilled(false); setYtdEstimated(false) }}
+                  >
+                    Re-estimate
+                  </button>
+                )}
               </div>
             )}
 

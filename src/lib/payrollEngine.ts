@@ -107,6 +107,115 @@ export function calcProvincialTax(
   return Math.max(0, tax)
 }
 
+// ── YTD Estimator ─────────────────────────────────────────────────────────────
+// Simulates all prior periods for an employee using their standard pay settings.
+// Used when no prior payslips exist in the DB (e.g. switching from another system).
+
+export interface YTDEstimate {
+  gross:  number
+  vac:    number
+  cpp1:   number
+  cpp2:   number
+  ei:     number
+  fed:    number
+  prov:   number
+  net:    number
+  custom: number
+  periodsSimulated: number
+}
+
+export function estimateYTD(
+  priorPeriods: number,          // number of periods already paid (periodNumber - 1)
+  province: string,
+  empType: 'salaried' | 'hourly',
+  annualSalary: number,
+  hourlyRate: number,
+  stdWeeklyHours: number,
+  periods: number,               // pay frequency (52/26/24/12)
+  vacType: 'accruing' | 'included',
+  vacRate: number,
+): YTDEstimate {
+  if (priorPeriods <= 0) {
+    return { gross: 0, vac: 0, cpp1: 0, cpp2: 0, ei: 0, fed: 0, prov: 0, net: 0, custom: 0, periodsSimulated: 0 }
+  }
+
+  let cumGross  = 0
+  let cumVac    = 0
+  let cumCpp1   = 0
+  let cumCpp2   = 0
+  let cumEi     = 0
+  let cumFed    = 0
+  let cumProv   = 0
+  let cumNet    = 0
+
+  for (let p = 0; p < priorPeriods; p++) {
+    // Build a minimal input for this period using standard pay only
+    const inputs: PayslipInputs = {
+      province:           province as 'ON' | 'AB' | 'BC',
+      empType,
+      annualSalary,
+      hourlyRate,
+      stdWeeklyHours,
+      actualHours:        0,
+      overtimeHours:      0,
+      overtimeMultiplier: 1.5,
+      periods:            periods as 52 | 26 | 24 | 12,
+      vacType,
+      vacRate,
+      extraEarnings:      [],
+      customDeductions:   [],
+      ytdPrev: {
+        gross:  cumGross,
+        vac:    cumVac,
+        cpp1:   cumCpp1,
+        cpp2:   cumCpp2,
+        ei:     cumEi,
+        fed:    cumFed,
+        prov:   cumProv,
+        custom: 0,
+        net:    cumNet,
+      },
+      periodStart:        '',
+      periodEnd:          '',
+      payDate:            '',
+      effectivePayDate:   '',
+      payMethod:          'eft',
+      chequeNumber:       '',
+      chequeDate:         '',
+      empJobTitle:        '',
+      empDepartment:      '',
+      payslipNotes:       '',
+      selectedTemplate:   1,
+      logoDataURL:        null,
+      displayPeriodNum:   null,
+    }
+
+    const r = calculatePayslip(inputs)
+
+    cumGross += r.totalGross
+    cumVac   += r.vacPay
+    cumCpp1  += r.cpp1
+    cumCpp2  += r.cpp2
+    cumEi    += r.eiEmployee
+    cumFed   += r.fedTax
+    cumProv  += r.provTax
+    cumNet   += r.netPay
+  }
+
+  return {
+    gross:  round2(cumGross),
+    vac:    round2(cumVac),
+    cpp1:   round2(cumCpp1),
+    cpp2:   round2(cumCpp2),
+    ei:     round2(cumEi),
+    fed:    round2(cumFed),
+    prov:   round2(cumProv),
+    net:    round2(cumNet),
+    custom: 0,
+    periodsSimulated: priorPeriods,
+  }
+}
+
 // ── Input validation ──────────────────────────────────────────────────────────
 
 export interface PayslipValidationError {

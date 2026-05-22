@@ -69,7 +69,20 @@ export default function EmployeesPage() {
   }
 
   async function onSubmit(data: FormData) {
-    const payload = { ...data, rate: Number(data.rate), std_weekly_hours: Number(data.std_weekly_hours), pay_frequency: Number(data.pay_frequency) as 52|26|24|12 }
+    const payload = {
+      ...data,
+      rate: Number(data.rate),
+      std_weekly_hours: Number(data.std_weekly_hours),
+      pay_frequency: Number(data.pay_frequency) as 52|26|24|12,
+      // Convert empty strings to null for date/optional fields
+      start_date: data.start_date || null,
+      emp_id: data.emp_id || null,
+      sin_last3: data.sin_last3 || null,
+      address: data.address || null,
+      job_title: data.job_title || null,
+      department: data.department || null,
+      bank_account_last4: data.bank_account_last4 || null,
+    }
     setSubmitting(true)
     try {
       if (editing) {

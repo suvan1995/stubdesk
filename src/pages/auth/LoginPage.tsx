@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
-import { recordLoginAttempt, isLoginLocked } from '@/lib/security'
+import { recordLoginAttempt, isLoginLocked, clearLoginLock } from '@/lib/security'
 import Input from '@/components/ui/Input'
 
 export default function LoginPage() {
@@ -58,7 +58,15 @@ export default function LoginPage() {
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm mb-4">
-            {error}
+            <p>{error}</p>
+            {error.includes('locked') || error.includes('attempts') ? (
+              <button
+                className="mt-2 text-xs underline text-red-600 hover:text-red-800"
+                onClick={() => { clearLoginLock(); setError(null) }}
+              >
+                Clear lockout (use if this is your own device)
+              </button>
+            ) : null}
           </div>
         )}
 

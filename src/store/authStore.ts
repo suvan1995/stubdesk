@@ -41,16 +41,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signIn: async (email, password) => {
     set({ loading: true })
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) {
+        set({ loading: false })
+        return { error: error.message }
+      }
+      // Fetch profile and wait for it to complete
+      await get().fetchProfile()
       set({ loading: false })
-      return { error: error.message }
+      return { error: null }
+    } catch (err) {
+      set({ loading: false })
+      return { error: 'An unexpected error occurred. Please try again.' }
     }
-    
-    // Fetch profile and wait for it to complete
-    await get().fetchProfile()
-    set({ loading: false })
-    return { error: null }
   },
 
   signOut: async () => {
@@ -59,13 +63,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   fetchProfile: async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single()
-    if (data) set({ profile: data as Profile })
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      if (error) {
+        console.error('fetchProfile error:', error.message)
+        return
+      }
+      if (data) set({ profile: data as Profile, user })
+    } catch (err) {
+      console.error('fetchProfile unexpected error:', err)
+    }
   },
 }))

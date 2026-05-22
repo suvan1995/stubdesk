@@ -91,6 +91,10 @@ export function recordLoginAttempt(success: boolean): { locked: boolean; remaini
   }
 }
 
+export function clearLoginLock() {
+  sessionStorage.removeItem(RATE_KEY)
+}
+
 export function isLoginLocked(): { locked: boolean; unlockIn?: number } {
   const raw = sessionStorage.getItem(RATE_KEY)
   if (!raw) return { locked: false }

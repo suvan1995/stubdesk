@@ -80,6 +80,8 @@ export default function PayslipBuilder() {
   const [ytdCustom, setYtdCustom] = useState(0)
   const [ytdNet,    setYtdNet]    = useState(0)
   const [ytdTaxMode, setYtdTaxMode] = useState<'separate' | 'combined'>('separate')
+  // Tracks whether YTDs were auto-filled from DB (true) or are still at zero with no DB history (false)
+  const [ytdAutoFilled, setYtdAutoFilled] = useState(false)
 
   useEffect(() => {
     fetchCompanies()
@@ -106,6 +108,10 @@ export default function PayslipBuilder() {
     if (!payDate)     setPayDate(info.payDate)
     setPeriodNumber(info.periodNumber)
     setAnchorWarning(info.anchorWarning ?? false)
+    // Reset YTD state when employee changes
+    setYtdAutoFilled(false)
+    setYtdGross(0); setYtdVac(0); setYtdCpp1(0); setYtdCpp2(0)
+    setYtdEi(0); setYtdFed(0); setYtdProv(0); setYtdCustom(0); setYtdNet(0)
 
     // 2. Fetch all saved payslips for this employee this year
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -114,15 +120,22 @@ export default function PayslipBuilder() {
       .eq('employee_id', selectedEmployee.id)
       .eq('company_id', selectedCompany.id)
       .then(({ data }: { data: any[] | null }) => {
-        if (!data || data.length === 0) return
+        if (!data || data.length === 0) {
+          setYtdAutoFilled(false)
+          return
+        }
         const year = new Date().getFullYear()
         // Only include payslips from prior periods this year (not the current period)
         const priorSlips = data.filter(p => {
           const slipYear = new Date(p.pay_date).getFullYear()
           return slipYear === year && p.period_start < info.periodStart
         })
-        if (priorSlips.length === 0) return
+        if (priorSlips.length === 0) {
+          setYtdAutoFilled(false)
+          return
+        }
 
+        setYtdAutoFilled(true)
         setYtdGross(priorSlips.reduce((s: number, p: any) => s + (p.gross_pay || 0), 0))
         setYtdVac(priorSlips.reduce((s: number, p: any) => s + (p.vac_pay || 0), 0))
         setYtdCpp1(priorSlips.reduce((s: number, p: any) => s + (p.cpp1 || 0), 0))
@@ -661,6 +674,38 @@ export default function PayslipBuilder() {
               {selectedEmployee?.start_date ? ` and employment start date (${fmtDisplay(selectedEmployee.start_date)})` : ''}.
               Edit any field manually if needed.
             </p>
+
+            {/* ── Warning: first payslip in app but not period 1 ── */}
+            {!ytdAutoFilled && periodNumber > 1 && (
+              <div className="mb-4 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3">
+                <div className="flex items-start gap-2">
+                  <span className="text-amber-500 text-lg leading-none mt-0.5">⚠</span>
+                  <div>
+                    <p className="text-sm font-semibold text-amber-800">
+                      This appears to be period {periodNumber} — but no prior payslips were found in StubDesk.
+                    </p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      If this employee was paid earlier this year through another system (QuickBooks, ADP, manual, etc.),
+                      you <strong>must enter the YTD totals below manually</strong> before calculating.
+                      Leaving them at $0 will cause CPP and EI to be over-deducted — the engine will treat this as period 1.
+                    </p>
+                    <p className="text-xs text-amber-600 mt-1.5 font-medium">
+                      Where to find these numbers: your previous payroll system's YTD report, or the employee's last pay stub from this year.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Confirmed auto-filled from DB */}
+            {ytdAutoFilled && (
+              <div className="mb-3 bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                <span className="text-green-500 text-sm">✓</span>
+                <p className="text-xs text-green-700">
+                  YTD values auto-filled from {periodNumber - 1} prior payslip{periodNumber - 1 !== 1 ? 's' : ''} saved in StubDesk this year.
+                </p>
+              </div>
+            )}
 
             {/* YTD Tax Input Mode Toggle */}
             <div className="mb-4 p-3 bg-gray-50 rounded-lg">

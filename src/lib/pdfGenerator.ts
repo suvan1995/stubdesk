@@ -232,31 +232,6 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   tx(fmtCAD(result.netPay), margin+labelW+amtW-3, y+7, { align: 'right' })
   y += 14
 
-  // ── EMPLOYER CONTRIBUTIONS ────────────────────────────────────
-  fr(margin, y, fullW, 7, sectionBg)
-  doc.setDrawColor(...(border as [number,number,number]))
-  doc.rect(margin, y, fullW, 7)
-  sf('bold', 8, gray as number[])
-  tx('EMPLOYER CONTRIBUTIONS (not deducted from employee pay)', margin+3, y+5)
-  y += 7
-
-  const empRows: [string, string][] = [
-    ['Employer CPP', fmtCAD(result.employerCPP)],
-    ['Employer EI',  fmtCAD(result.eiEmployer)],
-    ['Total Employer Cost This Period', fmtCAD(result.totalEmployerCost)],
-  ]
-  empRows.forEach(([label, val], i) => {
-    const isTot = i === empRows.length - 1
-    fr(margin, y, fullW, 6.5, isTot ? rowHL : (i%2===0 ? white : [248,249,250]))
-    sf(isTot ? 'bold' : 'normal', 8.5, black)
-    tx(label, margin+3, y+4.5)
-    tx(val, pageW-margin-3, y+4.5, { align: 'right' })
-    y += 6.5
-  })
-  doc.setDrawColor(...(border as [number,number,number]))
-  doc.rect(margin, y - 6.5*3, fullW, 6.5*3)
-  y += 4
-
   // ── VACATION NOTE ─────────────────────────────────────────────
   if (opts.vacType === 'included') {
     fr(margin, y, fullW, 7, [234,244,253])
@@ -290,7 +265,192 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   sf('normal', 7.5, gray as number[])
   tx(`Generated ${fmtToday()}  |  Province: ${company.province}  |  2026 CRA Rates`, margin, y)
 
+  // ── PAGE 2: Employer Cost Summary ────────────────────────────
+  addEmployerPage(doc, opts, opts.colorMode, T.primary)
+
   return doc.output('blob')
+}
+
+// ── Employer Cost Page (Page 2 of all templates) ─────────────────────────────
+// Adds a second page to the document with a full employer cost breakdown,
+// remittance summary, and CRA due date. Called by all 7 templates.
+function addEmployerPage(
+  doc: jsPDF,
+  opts: PayslipPDFOptions,
+  colorMode: 'color' | 'bw',
+  primaryColor: number[],
+): void {
+  const { result, company, employee } = opts
+  doc.addPage()
+
+  const pageW  = 215.9
+  const mg     = 15
+  const fw     = pageW - mg * 2
+  const white  = [255, 255, 255] as [number,number,number]
+  const black  = [30,  30,  30]  as [number,number,number]
+  const dgray  = [80,  80,  80]  as [number,number,number]
+  const mgray  = [130, 130, 130] as [number,number,number]
+  const lgray  = [210, 215, 220] as [number,number,number]
+  const altbg  = [245, 247, 250] as [number,number,number]
+  const primary = (colorMode === 'bw' ? [0, 0, 0] : primaryColor) as [number,number,number]
+  const green   = (colorMode === 'bw' ? [0, 0, 0] : [30, 132, 73]) as [number,number,number]
+
+  const sf = (style: string, size: number, c: [number,number,number] = black) => {
+    doc.setFont('helvetica', style); doc.setFontSize(size); doc.setTextColor(...c)
+  }
+  const tx = (s: string, x: number, yy: number, o?: object) => doc.text(s || '', x, yy, o)
+  const fr = (x: number, yy: number, w: number, h: number, c: [number,number,number]) => {
+    doc.setFillColor(...c); doc.rect(x, yy, w, h, 'F')
+  }
+  const bdr = (x: number, yy: number, w: number, h: number, c: [number,number,number] = lgray, lw = 0.3) => {
+    doc.setDrawColor(...c); doc.setLineWidth(lw); doc.rect(x, yy, w, h)
+  }
+  const rule = (yy: number) => {
+    doc.setDrawColor(...lgray); doc.setLineWidth(0.3); doc.line(mg, yy, pageW - mg, yy)
+  }
+
+  let y = 0
+
+  // ── Header bar ───────────────────────────────────────────────────────────
+  fr(0, 0, pageW, 26, primary)
+  sf('bold', 14, white); tx(company.name, mg, 11)
+  sf('normal', 8, white); tx('EMPLOYER COST SUMMARY — CONFIDENTIAL', mg, 18)
+  sf('normal', 8, white)
+  tx(`${fmtDateDisplay(opts.periodStart)} – ${fmtDateDisplay(opts.periodEnd)}  |  Pay Date: ${fmtDateDisplay(opts.payDate)}`, pageW - mg, 18, { align: 'right' })
+  y = 32
+
+  // ── Employee reference ────────────────────────────────────────────────────
+  fr(mg, y, fw, 12, altbg)
+  bdr(mg, y, fw, 12)
+  sf('bold', 8, mgray); tx('EMPLOYEE', mg + 3, y + 5)
+  sf('normal', 9, black); tx(employee.name, mg + 3, y + 10)
+  sf('bold', 8, mgray); tx('EMPLOYEE ID', mg + fw / 3, y + 5)
+  sf('normal', 9, black); tx(employee.emp_id || 'N/A', mg + fw / 3, y + 10)
+  sf('bold', 8, mgray); tx('PROVINCE', mg + fw * 2 / 3, y + 5)
+  sf('normal', 9, black); tx(company.province, mg + fw * 2 / 3, y + 10)
+  y += 18
+
+  // ── Section: Employee Gross Pay ───────────────────────────────────────────
+  fr(mg, y, fw, 7, primary)
+  sf('bold', 8, white); tx('EMPLOYEE GROSS PAY', mg + 3, y + 5)
+  y += 7
+
+  const rowH = 7
+  const col1 = fw * 0.55
+  const col2 = fw * 0.45
+
+  const dataRow = (label: string, val: string, bold = false, bg: [number,number,number] = white) => {
+    fr(mg, y, fw, rowH, bg)
+    doc.setDrawColor(...lgray); doc.setLineWidth(0.15); doc.line(mg, y + rowH, mg + fw, y + rowH)
+    sf(bold ? 'bold' : 'normal', 8.5, bold ? black : dgray)
+    tx(label, mg + 3, y + 5)
+    sf(bold ? 'bold' : 'normal', 8.5, black)
+    tx(val, mg + col1 + col2 - 3, y + 5, { align: 'right' })
+    y += rowH
+  }
+
+  dataRow('Regular Pay',          fmtCAD(result.regularPay))
+  if (result.otPay > 0)
+    dataRow(`Overtime Pay (${opts.overtimeMult}×)`, fmtCAD(result.otPay))
+  result.extraLines.forEach(e => dataRow(e.label, fmtCAD(e.amount)))
+  if (result.vacPay > 0)
+    dataRow(`Vacation Pay (${opts.vacRate}%)`, fmtCAD(result.vacPay))
+  dataRow('Total Gross Pay', fmtCAD(result.totalGross), true, altbg)
+  bdr(mg, y - rowH * (result.extraLines.length + (result.otPay > 0 ? 1 : 0) + (result.vacPay > 0 ? 1 : 0) + 2), fw,
+      rowH * (result.extraLines.length + (result.otPay > 0 ? 1 : 0) + (result.vacPay > 0 ? 1 : 0) + 2), lgray, 0.3)
+  y += 6
+
+  // ── Section: Employer Contributions ──────────────────────────────────────
+  fr(mg, y, fw, 7, primary)
+  sf('bold', 8, white); tx('EMPLOYER CONTRIBUTIONS', mg + 3, y + 5)
+  y += 7
+
+  dataRow('Employer CPP (matches employee CPP1 + CPP2)', fmtCAD(result.employerCPP))
+  dataRow('Employer EI (employee EI × 1.4)',             fmtCAD(result.eiEmployer))
+  dataRow('Total Employer Contributions',                fmtCAD(result.employerCPP + result.eiEmployer), true, altbg)
+  bdr(mg, y - rowH * 3, fw, rowH * 3, lgray, 0.3)
+  y += 6
+
+  // ── Section: Total Cost to Employer ──────────────────────────────────────
+  fr(mg, y, fw, 7, primary)
+  sf('bold', 8, white); tx('TOTAL COST TO EMPLOYER THIS PERIOD', mg + 3, y + 5)
+  y += 7
+
+  dataRow('Employee Gross Pay',          fmtCAD(result.totalGross))
+  dataRow('+ Employer CPP',              fmtCAD(result.employerCPP))
+  dataRow('+ Employer EI',               fmtCAD(result.eiEmployer))
+  fr(mg, y, fw, rowH + 1, green)
+  sf('bold', 10, white)
+  tx('TOTAL EMPLOYER COST', mg + 3, y + 6)
+  tx(fmtCAD(result.totalEmployerCost), mg + fw - 3, y + 6, { align: 'right' })
+  y += rowH + 1 + 8
+
+  // ── Section: CRA Remittance Summary ──────────────────────────────────────
+  fr(mg, y, fw, 7, primary)
+  sf('bold', 8, white); tx('CRA REMITTANCE SUMMARY', mg + 3, y + 5)
+  y += 7
+
+  // Column headers
+  fr(mg, y, fw, 6, altbg)
+  bdr(mg, y, fw, 6)
+  sf('bold', 7, mgray)
+  tx('ITEM',     mg + 3,          y + 4)
+  tx('EMPLOYEE', mg + fw * 0.45,  y + 4, { align: 'right' })
+  tx('EMPLOYER', mg + fw * 0.65,  y + 4, { align: 'right' })
+  tx('TOTAL',    mg + fw - 3,     y + 4, { align: 'right' })
+  y += 6
+
+  const remitRow = (label: string, emp: number, empr: number, bold = false) => {
+    const total = emp + empr
+    fr(mg, y, fw, rowH, bold ? altbg : white)
+    doc.setDrawColor(...lgray); doc.setLineWidth(0.15); doc.line(mg, y + rowH, mg + fw, y + rowH)
+    sf(bold ? 'bold' : 'normal', 8, bold ? black : dgray)
+    tx(label, mg + 3, y + 5)
+    sf(bold ? 'bold' : 'normal', 8, black)
+    tx(fmtCAD(emp),   mg + fw * 0.45, y + 5, { align: 'right' })
+    tx(empr > 0 ? fmtCAD(empr) : '—', mg + fw * 0.65, y + 5, { align: 'right' })
+    tx(fmtCAD(total), mg + fw - 3,    y + 5, { align: 'right' })
+    y += rowH
+  }
+
+  remitRow('CPP / CPP2',    result.cpp1 + result.cpp2, result.employerCPP)
+  remitRow('EI Premiums',   result.eiEmployee,          result.eiEmployer)
+  if (opts.taxDisplay === 'separate') {
+    remitRow('Federal Income Tax',       result.fedTax,  0)
+    remitRow(`Provincial Tax (${company.province})`, result.provTax, 0)
+  } else {
+    remitRow('Income Tax', result.fedTax + result.provTax, 0)
+  }
+  remitRow(
+    'TOTAL REMITTANCE',
+    result.totalDeductions,
+    result.employerCPP + result.eiEmployer,
+    true
+  )
+  bdr(mg, y - rowH * (opts.taxDisplay === 'separate' ? 5 : 4), fw,
+      rowH * (opts.taxDisplay === 'separate' ? 5 : 4), lgray, 0.3)
+  y += 6
+
+  // ── CRA due date note ─────────────────────────────────────────────────────
+  const payDateObj = opts.payDate ? new Date(opts.payDate + 'T12:00:00') : new Date()
+  const dueMonth   = new Date(payDateObj.getFullYear(), payDateObj.getMonth() + 1, 15)
+  const dueDateStr = dueMonth.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' })
+
+  fr(mg, y, fw, 10, colorMode === 'bw' ? [240,240,240] as [number,number,number] : [232,244,253] as [number,number,number])
+  bdr(mg, y, fw, 10, colorMode === 'bw' ? lgray : [180,210,240] as [number,number,number])
+  sf('bold', 8, colorMode === 'bw' ? black : [20,80,140] as [number,number,number])
+  tx(`Remittance due: ${dueDateStr}`, mg + 3, y + 4.5)
+  sf('normal', 7, colorMode === 'bw' ? mgray : [60,100,160] as [number,number,number])
+  tx('Regular remitters: due by the 15th of the month following the pay date.', mg + 3, y + 8.5)
+  y += 16
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  rule(y); y += 4
+  sf('italic', 7, mgray)
+  tx('This page is for employer records only and should not be distributed to employees.', mg, y)
+  y += 4
+  sf('normal', 7, mgray)
+  tx(`Generated ${fmtToday()}  |  ${company.name}  |  CRA BN: ${company.cra_bn || 'Not set'}`, mg, y)
 }
 
 // ── Build the storage path ────────────────────────────────────
@@ -483,12 +643,6 @@ function generateQuickBooksStyle(opts: PayslipPDFOptions): Blob {
   sf('bold', 14, green); tx(fmtCAD(result.netPay), boxX + boxW/2, y + 14, { align: 'center' })
   y += boxH2 + 5
 
-  // ── Employer contributions ────────────────────────────────────────────────
-  sf('bold', 7.5, mgray); tx('EMPLOYER CONTRIBUTIONS (not deducted from employee pay)', mg, y); y += 4
-  sf('normal', 7.5, dgray)
-  tx(`Employer CPP: ${fmtCAD(result.employerCPP)}   Employer EI: ${fmtCAD(result.eiEmployer)}   Total Employer Cost: ${fmtCAD(result.totalEmployerCost)}`, mg, y)
-  y += 8
-
   // ── Notes ─────────────────────────────────────────────────────────────────
   if (opts.notes) {
     rule(y, lgray, 0.2); y += 4
@@ -502,6 +656,9 @@ function generateQuickBooksStyle(opts: PayslipPDFOptions): Blob {
   rule(y, lgray); y += 4
   sf('italic', 6.5, mgray)
   tx(`Generated ${fmtToday()}  |  Province: ${company.province}  |  2026 CRA Rates`, mg, y)
+
+  // ── PAGE 2: Employer Cost Summary ─────────────────────────────────────────
+  addEmployerPage(doc, opts, opts.colorMode, [43, 130, 84])
 
   return doc.output('blob')
 }
@@ -681,25 +838,6 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
   sf('bold', 13, white); tx(fmtCAD(result.netPay), pageW - mg - 4, y + 8.5, { align: 'right' })
   y += 16
 
-  // ── Employer contributions block ──────────────────────────────────────────
-  bdr(mg, y, fw, 16, lgray)
-  fr(mg, y, fw, 6.5, altbg)
-  sf('bold', 7, mgray); tx('EMPLOYER CONTRIBUTIONS (not deducted from employee pay)', mg + 3, y + 4.5)
-  y += 6.5
-  const empCols = fw / 3
-  const empData = [
-    ['Employer CPP', fmtCAD(result.employerCPP)],
-    ['Employer EI',  fmtCAD(result.eiEmployer)],
-    ['Total Employer Cost', fmtCAD(result.totalEmployerCost)],
-  ]
-  empData.forEach(([label, val], i) => {
-    const x = mg + i * empCols
-    sf('bold', 6.5, mgray); tx(label, x + 3, y + 4)
-    sf('normal', 8.5, black); tx(val, x + 3, y + 8.5)
-    if (i < 2) { doc.setDrawColor(...lgray); doc.setLineWidth(0.2); doc.line(x + empCols, y, x + empCols, y + 9.5) }
-  })
-  y += 12
-
   // ── Notes ─────────────────────────────────────────────────────────────────
   if (opts.notes) {
     y += 3
@@ -714,6 +852,9 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
   doc.setDrawColor(...lgray); doc.setLineWidth(0.3); doc.line(mg, y, pageW - mg, y); y += 4
   sf('italic', 6.5, mgray)
   tx(`Generated ${fmtToday()}  |  Province: ${company.province}  |  2026 CRA Rates`, mg, y)
+
+  // ── PAGE 2: Employer Cost Summary ─────────────────────────────────────────
+  addEmployerPage(doc, opts, opts.colorMode, [15, 40, 80])
 
   return doc.output('blob')
 }

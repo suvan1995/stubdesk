@@ -56,6 +56,46 @@ function fmtToday(): string {
   )
 }
 
+// ── Logo helper — scales to fit a box while preserving aspect ratio ───────────
+// maxW/maxH define the bounding box; the image is scaled to fit inside it.
+function addLogoScaled(
+  doc: jsPDF,
+  dataURL: string,
+  x: number,
+  y: number,
+  maxW: number,
+  maxH: number
+): number {
+  // Decode natural dimensions from the data URL via an Image element approach.
+  // Since jsPDF runs in browser context we can use a temporary Image to get dims.
+  try {
+    const ext = dataURL
+      .substring(dataURL.indexOf('/') + 1, dataURL.indexOf(';'))
+      .toUpperCase()
+      .replace('SVG+XML', 'PNG')
+    const fmt = ext === 'JPG' ? 'JPEG' : ext
+
+    // Get natural dimensions using a temporary canvas
+    const img = new Image()
+    img.src = dataURL
+    const nw = img.naturalWidth  || maxW
+    const nh = img.naturalHeight || maxH
+
+    // Scale to fit inside maxW × maxH preserving aspect ratio
+    const scale = Math.min(maxW / nw, maxH / nh)
+    const w = nw * scale
+    const h = nh * scale
+
+    // Center vertically within the maxH box
+    const yOffset = (maxH - h) / 2
+
+    doc.addImage(dataURL, fmt, x, y + yOffset, w, h)
+    return x + w + 3   // return x position after logo + small gap
+  } catch {
+    return x  // if logo fails, return original x (no logo rendered)
+  }
+}
+
 export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   // Route to specialised generators for templates 6 & 7
   if (opts.template === 6) return generateQuickBooksStyle(opts)
@@ -106,14 +146,7 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   fr(0, 0, pageW, 28, primary)
   let logoEndX = margin
   if (opts.logoDataURL) {
-    try {
-      const ext = opts.logoDataURL.substring(
-        opts.logoDataURL.indexOf('/')+1,
-        opts.logoDataURL.indexOf(';')
-      ).toUpperCase().replace('SVG+XML','PNG')
-      doc.addImage(opts.logoDataURL, ext === 'JPG' ? 'JPEG' : ext, margin, 3, 22, 22)
-      logoEndX = margin + 26
-    } catch { /* skip bad logo */ }
+    logoEndX = addLogoScaled(doc, opts.logoDataURL, margin, 3, 22, 22)
   }
   sf('bold', 15, headerText as number[])
   tx(company.name, logoEndX, 11)
@@ -539,15 +572,9 @@ function generateQuickBooksStyle(opts: PayslipPDFOptions): Blob {
 
   // ── Logo + company name ──────────────────────────────────────────────────
   if (opts.logoDataURL) {
-    try {
-      const ext = opts.logoDataURL.substring(opts.logoDataURL.indexOf('/')+1, opts.logoDataURL.indexOf(';')).toUpperCase()
-      doc.addImage(opts.logoDataURL, ext === 'JPG' ? 'JPEG' : (ext === 'SVG+XML' ? 'PNG' : ext), mg, y, 18, 18)
-      sf('bold', 14, black); tx(company.name, mg + 22, y + 8)
-      sf('normal', 7.5, mgray); tx(`${company.street}, ${company.city}, ${company.province}  ${company.postal}`, mg + 22, y + 13)
-    } catch {
-      sf('bold', 16, black); tx(company.name, mg, y + 8)
-      sf('normal', 7.5, mgray); tx(`${company.street}, ${company.city}, ${company.province}  ${company.postal}`, mg, y + 13)
-    }
+    const logoEndX = addLogoScaled(doc, opts.logoDataURL, mg, y, 18, 18)
+    sf('bold', 14, black); tx(company.name, logoEndX, y + 8)
+    sf('normal', 7.5, mgray); tx(`${company.street}, ${company.city}, ${company.province}  ${company.postal}`, logoEndX, y + 13)
   } else {
     sf('bold', 16, black); tx(company.name, mg, y + 8)
     sf('normal', 7.5, mgray); tx(`${company.street}, ${company.city}, ${company.province}  ${company.postal}`, mg, y + 13)
@@ -761,11 +788,7 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
   // Logo
   let logoEndX = mg
   if (opts.logoDataURL) {
-    try {
-      const ext = opts.logoDataURL.substring(opts.logoDataURL.indexOf('/')+1, opts.logoDataURL.indexOf(';')).toUpperCase()
-      doc.addImage(opts.logoDataURL, ext === 'JPG' ? 'JPEG' : (ext === 'SVG+XML' ? 'PNG' : ext), mg, 4, 20, 20)
-      logoEndX = mg + 24
-    } catch { logoEndX = mg }
+    logoEndX = addLogoScaled(doc, opts.logoDataURL, mg, 4, 20, 20)
   }
 
   sf('bold', 15, white); tx(company.name, logoEndX, 12)

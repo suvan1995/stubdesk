@@ -9,6 +9,7 @@ import { generateT4PDF } from '@/lib/t4PdfGenerator'
 import { Card } from '@/components/ui/Card'
 import clsx from 'clsx'
 import type { T4Slip, Payslip, Company } from '@/types/database'
+import Skeleton from '@/components/ui/Skeleton'
 
 const CURRENT_YEAR = new Date().getFullYear()
 const YEARS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i)
@@ -164,7 +165,11 @@ export default function T4ListPage() {
 
       {/* T4 list */}
       {loading ? (
-        <Card><p className="text-center text-gray-400 py-8">Loading…</p></Card>
+        <Card className="p-6 space-y-4">
+          <Skeleton className="h-6 w-1/4 rounded" />
+          <Skeleton className="h-10 w-full rounded-xl" />
+          <Skeleton className="h-10 w-full rounded-xl" />
+        </Card>
       ) : filtered.length === 0 ? (
         <Card>
           <p className="text-center text-gray-400 py-8">

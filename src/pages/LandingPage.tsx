@@ -1,353 +1,521 @@
+import { useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 
 export default function LandingPage() {
   const { user, loading } = useAuthStore()
 
+  // Calculator Preview Widget States
+  const [hourlyRate, setHourlyRate] = useState<number>(35)
+  const [hoursWorked, setHoursWorked] = useState<number>(40)
+  const [province, setProvince] = useState<'ON' | 'AB' | 'BC'>('ON')
+  
+  // Pricing toggle state
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('yearly')
+
+  // FAQ state
+  const [openFaq, setOpenFaq] = useState<number | null>(null)
+
   // Redirect logged-in users straight to dashboard
   if (!loading && user) {
     return <Navigate to="/dashboard" replace />
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+  // Quick Payroll Calculator engine for the homepage demo
+  const grossPay = hourlyRate * hoursWorked
+  const cppRate = 0.0595
+  const eiRate = 0.0164
+  const taxRate = province === 'ON' ? 0.142 : province === 'AB' ? 0.155 : 0.138
 
-      {/* ── Floating Nav ── */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-200/50 shadow-sm">
+  const cppDeduct = grossPay * cppRate
+  const eiDeduct = grossPay * eiRate
+  const taxDeduct = grossPay * taxRate
+  const totalDeductions = cppDeduct + eiDeduct + taxDeduct
+  const netPay = grossPay - totalDeductions
+
+  const fmt = (val: number) =>
+    new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(val)
+
+  const faqs = [
+    {
+      q: 'Is StubDesk compliant with the latest CRA tax regulations?',
+      a: 'Absolutely. StubDesk is built specifically for Canadian payroll and is updated annually with the latest Canada Revenue Agency (CRA) guidelines, including standard CPP, EI premiums, and the new progressive CPP2 contributions for high-earning employees.'
+    },
+    {
+      q: 'How does year-end T4 slip generation work?',
+      a: 'At year-end, StubDesk aggregates all payslip history for your employees and automatically populates Box 14, 16, 17, 18, 22, 24, and 26. You can download official CRA-compliant T4 PDF slips for your employees and export the required XML internet file transfers.'
+    },
+    {
+      q: 'Can I manage payroll for multiple corporate branches or companies?',
+      a: 'Yes! StubDesk supports multi-company management from a single account. Our Pro Plan offers unlimited companies and employees, making it ideal for accounting professionals and serial entrepreneurs.'
+    },
+    {
+      q: 'Is my financial and employee data secure with StubDesk?',
+      a: 'Data safety is our primary focus. We implement strict Content Security Policies (CSP), automatic session timeout logs to protect admin panels on shared devices, and secure cloud storage synced directly with enterprise Supabase databases.'
+    }
+  ]
+
+  return (
+    <div className="landing-dark-body relative min-h-screen overflow-hidden">
+      {/* Glow Orbs background effect */}
+      <div className="glow-sphere glow-cyan"></div>
+      <div className="glow-sphere glow-purple"></div>
+
+      {/* Sticky Navigation */}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#080b11]/75 backdrop-blur-xl border-b border-white/5 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-gradient-to-br from-brand-600 to-brand-700 rounded-2xl flex items-center justify-center shadow-lg shadow-brand-200">
-              <span className="text-white font-black text-xl">S</span>
+            <div className="w-10 h-10 bg-cyan-500 rounded-xl flex items-center justify-center shadow-lg badge-glowing shrink-0">
+              <span className="text-slate-950 font-black text-xl">S</span>
             </div>
             <div>
-              <div className="font-black text-brand-700 text-xl tracking-tight">StubDesk</div>
-              <div className="text-xs text-gray-500 -mt-0.5">Canadian Payroll</div>
+              <div className="font-extrabold text-white text-xl tracking-tight leading-none">
+                Stub<span className="text-gradient-cyan">Desk</span>
+              </div>
+              <div className="text-[10px] text-slate-500 font-semibold tracking-wider uppercase mt-1">Canadian Payroll</div>
             </div>
           </div>
-          <div className="flex items-center gap-6">
-            <a href="#features" className="text-sm font-medium text-gray-600 hover:text-brand-600 transition-colors hidden md:block">Features</a>
-            <a href="#how-it-works" className="text-sm font-medium text-gray-600 hover:text-brand-600 transition-colors hidden md:block">How It Works</a>
-            <a href="#pricing" className="text-sm font-medium text-gray-600 hover:text-brand-600 transition-colors hidden md:block">Pricing</a>
-            {user ? (
-              <Link to="/dashboard" className="btn-primary text-sm shadow-lg shadow-brand-200">Dashboard →</Link>
-            ) : (
-              <>
-                <Link to="/login" className="text-sm font-semibold text-gray-700 hover:text-brand-600 transition-colors">Sign In</Link>
-                <Link to="/signup" className="btn-primary text-sm shadow-lg shadow-brand-200">Get Started Free</Link>
-              </>
-            )}
+          <div className="hidden md:flex items-center gap-8">
+            <a href="#features" className="text-sm font-semibold text-slate-300 hover:text-cyan-400 transition-colors">Features</a>
+            <a href="#demo" className="text-sm font-semibold text-slate-300 hover:text-cyan-400 transition-colors">Interactive Demo</a>
+            <a href="#pricing" className="text-sm font-semibold text-slate-300 hover:text-cyan-400 transition-colors">Pricing</a>
+            <a href="#faq" className="text-sm font-semibold text-slate-300 hover:text-cyan-400 transition-colors">FAQ</a>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link to="/login" className="inline-flex items-center justify-center border-1.5 border-white/10 hover:border-cyan-500 px-4 py-2 text-sm font-semibold text-white hover:text-cyan-400 rounded-xl transition-all hover:bg-cyan-500/5 bg-transparent cursor-pointer">Sign In</Link>
+            <Link to="/signup" className="inline-flex items-center justify-center bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-bold px-4 py-2 text-sm rounded-xl transition-all shadow-lg hover:shadow-cyan-400/30 hover:scale-[1.02] cursor-pointer">Get Started</Link>
           </div>
         </div>
       </nav>
 
-      {/* ── Hero Section ── */}
-      <section className="pt-32 pb-20 px-6 relative overflow-hidden">
-        {/* Background decoration */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-20 right-10 w-96 h-96 bg-brand-200/30 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-20 left-10 w-96 h-96 bg-indigo-200/30 rounded-full blur-3xl"></div>
-        </div>
-
-        <div className="max-w-6xl mx-auto relative z-10">
-          <div className="text-center max-w-4xl mx-auto">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 bg-white/90 backdrop-blur border border-brand-200 rounded-full px-5 py-2 text-sm font-semibold text-brand-700 mb-8 shadow-lg shadow-brand-100">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand-500"></span>
-              </span>
-              CRA 2026 Compliant · Built for Canada
+      {/* Hero & Interactive Demo Section */}
+      <header className="pt-36 pb-20 lg:pt-44 lg:pb-32 relative">
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
+          
+          {/* Hero Content Left */}
+          <div className="lg:col-span-6 space-y-8 text-left">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-950/60 border border-cyan-800/40 text-cyan-400 text-xs font-bold">
+              <span className="pulsing-indicator"></span>
+              2026 CRA COMPLIANT
             </div>
-
-            {/* Main headline */}
-            <h1 className="text-5xl md:text-7xl font-black text-gray-900 leading-tight mb-6 tracking-tight">
-              Payroll that<br />
-              <span className="bg-gradient-to-r from-brand-600 via-brand-500 to-indigo-600 bg-clip-text text-transparent">
-                just works.
-              </span>
+            
+            <h1 className="text-5xl sm:text-6xl md:text-7xl font-black text-white leading-tight tracking-tight">
+              Payroll that <br />
+              calculates <br />
+              <span className="text-gradient-cyan">itself.</span>
             </h1>
-
-            <p className="text-xl md:text-2xl text-gray-600 leading-relaxed mb-10 max-w-3xl mx-auto font-light">
-              Calculate CPP, EI, and income tax with confidence. Generate professional pay stubs and T4s in minutes — no accounting degree required.
+            
+            <p className="text-lg text-slate-400 max-w-lg leading-relaxed">
+              Calculate federal & provincial taxes, instantly generate gorgeous PDF payslips, and compile year-end T4 returns in seconds. Engineered precisely for Canadian small businesses.
             </p>
-
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-              <Link
-                to="/signup"
-                className="group bg-gradient-to-r from-brand-600 to-brand-700 text-white font-bold px-10 py-4 rounded-2xl hover:shadow-2xl hover:shadow-brand-300 transition-all duration-300 text-lg flex items-center gap-2 shadow-xl shadow-brand-200"
-              >
+            
+            <div className="flex flex-col sm:flex-row gap-4 pt-2">
+              <Link to="/signup" className="inline-flex items-center justify-center bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-extrabold px-8 py-4 rounded-2xl transition-all shadow-lg hover:shadow-cyan-400/40 hover:scale-[1.02] cursor-pointer text-base">
                 Start Free Trial
-                <span className="group-hover:translate-x-1 transition-transform">→</span>
               </Link>
-              <Link
-                to="/login"
-                className="bg-white text-gray-700 font-semibold px-10 py-4 rounded-2xl hover:bg-gray-50 transition-all duration-300 text-lg border-2 border-gray-200 shadow-lg"
-              >
-                Sign In
-              </Link>
+              <a href="#demo" className="inline-flex items-center justify-center border-2 border-white/10 hover:border-cyan-500 px-8 py-4 text-base font-semibold text-white hover:text-cyan-400 rounded-2xl transition-all hover:bg-cyan-500/5 bg-transparent cursor-pointer">
+                Try the Calculator
+              </a>
             </div>
 
-            <p className="text-sm text-gray-500">
-              ✓ No credit card required  ·  ✓ 14-day free trial  ·  ✓ Cancel anytime
+            {/* Quick Metrics */}
+            <div className="grid grid-cols-3 gap-6 pt-6 border-t border-slate-800/60">
+              <div>
+                <div className="text-3xl font-black text-white">100%</div>
+                <div className="text-xs text-slate-500 font-medium mt-1">CRA Accuracy Guarantee</div>
+              </div>
+              <div>
+                <div className="text-3xl font-black text-white">5k+</div>
+                <div className="text-xs text-slate-500 font-medium mt-1">Payslips Generated</div>
+              </div>
+              <div>
+                <div className="text-3xl font-black text-white">&lt; 10s</div>
+                <div className="text-xs text-slate-500 font-medium mt-1">Processing Time</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Calculator Widget Right */}
+          <div id="demo" className="lg:col-span-6">
+            <div className="card-glass relative overflow-hidden p-6 sm:p-8 space-y-6">
+              
+              {/* Decorative top gradient bar */}
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-400 to-purple-500"></div>
+              
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <span>📱</span> Interactive Calculator Preview
+                </h3>
+                <span className="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono">
+                  Live Engine
+                </span>
+              </div>
+
+              {/* Calculator Inputs */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">
+                    Hourly Wage
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-slate-500 text-sm">$</span>
+                    <input 
+                      type="number"
+                      className="preview-input pl-7" 
+                      value={hourlyRate}
+                      onChange={(e) => setHourlyRate(Math.max(0, parseFloat(e.target.value) || 0))}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">
+                    Hours Worked
+                  </label>
+                  <input 
+                    type="number"
+                    className="preview-input" 
+                    value={hoursWorked}
+                    onChange={(e) => setHoursWorked(Math.max(0, parseFloat(e.target.value) || 0))}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">
+                    Province
+                  </label>
+                  <select 
+                    className="preview-input"
+                    value={province}
+                    onChange={(e) => setProvince(e.target.value as any)}
+                  >
+                    <option value="ON">Ontario (ON)</option>
+                    <option value="AB">Alberta (AB)</option>
+                    <option value="BC">British Columbia (BC)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Interactive Mock Payslip Preview */}
+              <div className="bg-slate-950/80 border border-slate-800/80 rounded-2xl p-5 font-mono text-xs text-slate-300 space-y-4">
+                <div className="flex justify-between items-start border-b border-slate-800 pb-3">
+                  <div>
+                    <div className="font-bold text-white uppercase tracking-wider text-sm">StubDesk Corp</div>
+                    <div className="text-slate-500 text-[10px] mt-0.5">123 Bay St | Toronto, ON</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded text-[10px] font-bold">
+                      SAMPLE PREVIEW
+                    </span>
+                  </div>
+                </div>
+
+                {/* Payslip details */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-left">
+                    <span className="text-slate-500">Gross Earnings:</span>
+                    <span className="font-bold text-white">{fmt(grossPay)}</span>
+                  </div>
+                  <div className="flex justify-between pl-3 text-slate-400 text-left">
+                    <span>Regular Pay ({hoursWorked} hrs @ {fmt(hourlyRate)}/hr):</span>
+                    <span>{fmt(grossPay)}</span>
+                  </div>
+
+                  <div className="border-t border-slate-905 my-2"></div>
+
+                  <div className="flex justify-between text-red-400 text-left">
+                    <span className="font-semibold">Statutory Deductions:</span>
+                    <span>-{fmt(totalDeductions)}</span>
+                  </div>
+                  <div className="flex justify-between pl-3 text-slate-400 text-left">
+                    <span>CPP contribution (5.95%):</span>
+                    <span>-{fmt(cppDeduct)}</span>
+                  </div>
+                  <div className="flex justify-between pl-3 text-slate-400 text-left">
+                    <span>EI premium (1.64%):</span>
+                    <span>-{fmt(eiDeduct)}</span>
+                  </div>
+                  <div className="flex justify-between pl-3 text-slate-400 text-left">
+                    <span>Estimated Income Tax:</span>
+                    <span>-{fmt(taxDeduct)}</span>
+                  </div>
+                </div>
+
+                {/* Dynamic Net Pay Box */}
+                <div className="bg-cyan-950/30 border border-cyan-500/20 rounded-xl p-3 flex justify-between items-center text-sm">
+                  <span className="font-black text-cyan-400">NET PAYOUT:</span>
+                  <span className="font-black text-cyan-400 text-base">{fmt(netPay)}</span>
+                </div>
+
+                {/* CRA remittance summary note */}
+                <div className="text-[10px] text-slate-500 text-center italic">
+                  * Estimated CRA Remittance: {fmt(cppDeduct * 2 + eiDeduct * 2.4 + taxDeduct)} due by next month.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Core Features Grid */}
+      <section id="features" className="py-28 relative bg-slate-950/40 border-y border-slate-900">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center max-w-3xl mx-auto mb-20 space-y-4">
+            <h2 className="text-4xl md:text-5xl font-black text-white">
+              Everything you need to stay <span className="text-gradient-cyan">CRA Compliant.</span>
+            </h2>
+            <p className="text-lg text-slate-400">
+              Enterprise payroll infrastructure simplified into a beautiful, lightning-fast dashboard.
             </p>
-          </div>
-
-          {/* Hero Image / Preview */}
-          <div className="mt-16 relative">
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-50 via-transparent to-transparent h-32 bottom-0 z-10"></div>
-            <div className="bg-white rounded-3xl shadow-2xl border border-gray-200 overflow-hidden transform hover:scale-[1.02] transition-transform duration-500">
-              <div className="bg-gradient-to-r from-brand-600 to-brand-700 px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex gap-1.5">
-                    <div className="w-3 h-3 rounded-full bg-white/30"></div>
-                    <div className="w-3 h-3 rounded-full bg-white/30"></div>
-                    <div className="w-3 h-3 rounded-full bg-white/30"></div>
-                  </div>
-                  <span className="text-white font-bold text-sm ml-3">StubDesk — Payslip Builder</span>
-                </div>
-                <div className="text-white/70 text-xs">Pay Period: Jun 1 – Jun 14, 2026</div>
-              </div>
-              <div className="p-8 bg-gradient-to-br from-gray-50 to-white">
-                <div className="grid grid-cols-2 gap-6 mb-6">
-                  <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
-                    <div className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Employee</div>
-                    <div className="text-lg font-bold text-gray-900">Jane Smith</div>
-                    <div className="text-sm text-gray-500 mt-1">Bi-Weekly · Salaried</div>
-                  </div>
-                  <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
-                    <div className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Gross Pay</div>
-                    <div className="text-lg font-bold text-gray-900">$2,884.62</div>
-                    <div className="text-sm text-gray-500 mt-1">Regular + Vacation</div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">CPP</span>
-                    <span className="font-mono text-red-600">−$148.20</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">EI</span>
-                    <span className="font-mono text-red-600">−$47.10</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Federal Tax</span>
-                    <span className="font-mono text-red-600">−$312.40</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Provincial Tax (ON)</span>
-                    <span className="font-mono text-red-600">−$148.80</span>
-                  </div>
-                  <div className="border-t border-gray-200 pt-3 mt-3"></div>
-                  <div className="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg px-4 py-3 border border-green-200">
-                    <span className="font-bold text-green-900">Net Pay</span>
-                    <span className="font-black text-green-700 text-xl">$2,228.12</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── How It Works ── */}
-      <section id="how-it-works" className="py-24 px-6 bg-white relative">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-4">How it works</h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">Four simple steps from setup to year-end filing.</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            {[
-              { num: '01', title: 'Add Company', desc: 'Enter your business details, address, and CRA business number.', icon: '🏢' },
-              { num: '02', title: 'Add Employees', desc: 'Set up each employee with pay rate, schedule, and deductions.', icon: '👥' },
-              { num: '03', title: 'Run Payroll', desc: 'Generate pay stubs with automatic tax calculations in seconds.', icon: '⚡' },
-              { num: '04', title: 'File T4s', desc: 'Auto-generate T4 slips and export CRA XML at year-end.', icon: '📄' },
-            ].map((step) => (
-              <div key={step.num} className="relative group">
-                <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-8 border-2 border-gray-200 hover:border-brand-300 hover:shadow-xl transition-all duration-300 h-full">
-                  <div className="text-5xl mb-4">{step.icon}</div>
-                  <div className="text-sm font-black text-brand-600 mb-2 tracking-wider">{step.num}</div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-3">{step.title}</h3>
-                  <p className="text-gray-600 leading-relaxed">{step.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Features Grid ── */}
-      <section id="features" className="py-24 px-6 bg-gradient-to-br from-slate-50 to-blue-50">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-4">Everything you need</h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">Powerful features designed for Canadian small businesses.</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[
-              { icon: '🇨🇦', title: 'CRA Compliant', desc: 'CPP, CPP2, EI, and income tax calculated correctly for ON, AB, and BC. Updated annually from CRA T4127.' },
-              { icon: '📊', title: 'YTD Tracking', desc: 'Automatic year-to-date calculations for all earnings and deductions. Perfect for mid-year onboarding.' },
-              { icon: '🎨', title: '7 Templates', desc: 'Choose from professional pay stub designs. Color or black & white. Add your company logo.' },
-              { icon: '📱', title: 'Cloud Storage', desc: 'All payslips saved securely in the cloud. Access from anywhere, anytime.' },
-              { icon: '🏢', title: 'Multi-Company', desc: 'Manage payroll for multiple businesses from one account. Each with separate employees and history.' },
-              { icon: '📄', title: 'T4 Generation', desc: 'Auto-generate T4 slips from payslip history. Export CRA-compliant XML for electronic filing.' },
-              { icon: '🔐', title: 'Secure & Private', desc: 'Hosted on Canadian servers. Row-level security ensures your data stays private.' },
-              { icon: '⚡', title: 'Lightning Fast', desc: 'Generate professional pay stubs in under 30 seconds. No waiting, no complexity.' },
-              { icon: '💰', title: 'Transparent Pricing', desc: 'Simple plans with no hidden fees. Free tier available. Cancel anytime.' },
-            ].map((feature) => (
-              <div key={feature.title} className="bg-white rounded-2xl p-8 border border-gray-200 hover:shadow-xl hover:border-brand-300 transition-all duration-300 group">
-                <div className="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">{feature.icon}</div>
-                <h3 className="text-xl font-bold text-gray-900 mb-3">{feature.title}</h3>
-                <p className="text-gray-600 leading-relaxed">{feature.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Pricing ── */}
-      <section id="pricing" className="py-24 px-6 bg-white">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-4">Simple, transparent pricing</h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">All prices in Canadian dollars. No hidden fees. Cancel anytime.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
               {
-                name: 'Free',
-                price: 0,
-                period: 'Forever free',
-                features: ['1 company', '2 employees', '10 payslips/month', 'All 7 templates', 'PDF pay stubs'],
-                cta: 'Get Started',
-                popular: false,
+                title: 'Precision Calculations',
+                desc: 'Automatic CPP, CPP2 surtax, EI, and progressive income taxes dynamically matched to Ontario, Alberta, and British Columbia regulations.',
+                icon: '🇨🇦',
+                color: 'cyan'
               },
               {
-                name: 'Starter',
-                price: 7.49,
-                period: 'per month',
-                features: ['2 companies', '5 employees each', 'Unlimited payslips', 'T4 generation', 'Cloud storage'],
-                cta: 'Start Free Trial',
-                popular: false,
+                title: 'Beautiful Multi-Templates',
+                desc: 'Instantly download, print, or email payslips with 7 elegant layouts, including black & white minimal and robust corporate formats.',
+                icon: '📄',
+                color: 'purple'
               },
               {
-                name: 'Pro',
-                price: 12.99,
-                period: 'per month',
-                features: ['Unlimited companies', 'Unlimited employees', 'Unlimited payslips', 'T4 + CRA XML export', 'Priority support'],
-                cta: 'Start Free Trial',
-                popular: true,
+                title: 'Year-End T4 Automations',
+                desc: 'Generate, edit, and approve T4 returns at year-end. Export official XML data transfer sheets ready for direct CRA upload.',
+                icon: '⚡',
+                color: 'cyan'
               },
-            ].map((plan) => (
-              <div
-                key={plan.name}
-                className={`rounded-3xl p-8 border-2 relative ${
-                  plan.popular
-                    ? 'border-brand-500 bg-gradient-to-br from-brand-50 to-indigo-50 shadow-2xl shadow-brand-200 scale-105'
-                    : 'border-gray-200 bg-white hover:border-brand-300 hover:shadow-xl transition-all duration-300'
-                }`}
+              {
+                title: 'Cloud Document Vault',
+                desc: 'Securely archive every historical payslip, record of employment, and tax year. Access your entire payroll system anywhere, anytime.',
+                icon: '☁️',
+                color: 'purple'
+              },
+              {
+                title: 'Multi-Company Support',
+                desc: 'Manage payroll for multiple corporations, branches, or clients under a single centralized dashboard. Perfect for growing firms.',
+                icon: '🏢',
+                color: 'cyan'
+              },
+              {
+                title: 'Secure Admin Oversight',
+                desc: 'Role-based limits, advanced data sanitization, full-fledged tax bracket customization panels, and secure session logs.',
+                icon: '🔒',
+                color: 'purple'
+              }
+            ].map((f, i) => (
+              <div 
+                key={i} 
+                className={`card-glass ${f.color === 'purple' ? 'card-glass-purple' : ''} text-left p-10 space-y-4`}
               >
-                {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-brand-600 to-brand-700 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg">
-                    MOST POPULAR
-                  </div>
-                )}
-                <div className="text-center mb-6">
-                  <h3 className="text-2xl font-black text-gray-900 mb-2">{plan.name}</h3>
-                  <div className="mb-2">
-                    {plan.price === 0 ? (
-                      <span className="text-5xl font-black text-gray-900">Free</span>
-                    ) : (
-                      <>
-                        <span className="text-5xl font-black text-brand-700">${plan.price}</span>
-                        <span className="text-gray-500 text-lg ml-2">{plan.period}</span>
-                      </>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-500">{plan.period}</p>
+                <div className="text-4xl inline-block bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
+                  {f.icon}
                 </div>
-
-                <ul className="space-y-4 mb-8">
-                  {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-3">
-                      <span className="text-green-500 font-bold text-lg shrink-0">✓</span>
-                      <span className="text-gray-700">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <Link
-                  to="/signup"
-                  className={`block text-center font-bold py-4 rounded-xl transition-all duration-300 ${
-                    plan.popular
-                      ? 'bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-lg shadow-brand-200 hover:shadow-xl hover:shadow-brand-300'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {plan.cta}
-                </Link>
+                <h3 className="text-xl font-bold text-white">{f.title}</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">{f.desc}</p>
               </div>
             ))}
           </div>
-
-          <p className="text-center text-sm text-gray-500 mt-12">
-            All paid plans include a 14-day free trial. No credit card required to start. Payments processed securely by Stripe.
-          </p>
         </div>
       </section>
 
-      {/* ── Final CTA ── */}
-      <section className="py-24 px-6 bg-gradient-to-br from-brand-600 via-brand-700 to-indigo-700 text-white relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-10 left-10 w-64 h-64 bg-white rounded-full blur-3xl"></div>
-          <div className="absolute bottom-10 right-10 w-96 h-96 bg-white rounded-full blur-3xl"></div>
-        </div>
+      {/* Dynamic Pricing Cards Section */}
+      <section id="pricing" className="py-28 relative">
+        <div className="max-w-7xl mx-auto px-6 text-center space-y-12">
+          
+          <div className="max-w-2xl mx-auto space-y-4">
+            <h2 className="text-4xl md:text-5xl font-black text-white">
+              Sleek pricing. <span className="text-gradient-purple">No hidden fees.</span>
+            </h2>
+            <p className="text-lg text-slate-400">
+              Pick the tier that fits your company size. Switch or cancel anytime.
+            </p>
+            
+            {/* Toggle Billing Pill */}
+            <div className="pt-4">
+              <div className="toggle-container">
+                <button 
+                  className={`toggle-btn ${billingCycle === 'monthly' ? 'active-purple' : ''}`}
+                  onClick={() => setBillingCycle('monthly')}
+                >
+                  Monthly
+                </button>
+                <button 
+                  className={`toggle-btn ${billingCycle === 'yearly' ? 'active-purple' : ''}`}
+                  onClick={() => setBillingCycle('yearly')}
+                >
+                  Yearly (Save 20%)
+                </button>
+              </div>
+            </div>
+          </div>
 
-        <div className="max-w-4xl mx-auto text-center relative z-10">
-          <h2 className="text-4xl md:text-5xl font-black mb-6">Ready to simplify payroll?</h2>
-          <p className="text-xl text-brand-100 mb-10 max-w-2xl mx-auto">
-            Join hundreds of Canadian small businesses who trust StubDesk for their payroll needs.
-          </p>
-          <Link
-            to="/signup"
-            className="inline-block bg-white text-brand-700 font-bold px-12 py-5 rounded-2xl hover:bg-brand-50 transition-all duration-300 text-lg shadow-2xl hover:scale-105"
-          >
-            Start Free Trial →
-          </Link>
-          <p className="text-brand-200 text-sm mt-6">No credit card required · 14-day free trial · Cancel anytime</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto pt-6 text-left">
+            
+            {/* Free Plan */}
+            <div className="card-glass flex flex-col justify-between p-8">
+              <div className="space-y-6">
+                <div>
+                  <span className="text-xs uppercase tracking-widest text-slate-500 font-bold">Free Tier</span>
+                  <h3 className="text-2xl font-bold text-white mt-1">Hobbyist</h3>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl font-extrabold text-white">$0</span>
+                  <span className="text-slate-500 text-sm">/month</span>
+                </div>
+                <p className="text-slate-400 text-sm">Perfect for generating occasional single payslips without cloud storage.</p>
+                <div className="border-t border-slate-800/80 my-4"></div>
+                <ul className="space-y-3 text-sm text-slate-300">
+                  <li className="flex items-center gap-2">✓ 1 Active Company</li>
+                  <li className="flex items-center gap-2">✓ Up to 2 Employees</li>
+                  <li className="flex items-center gap-2">✓ Dynamic 2026 Tax Engine</li>
+                  <li className="flex items-center gap-2 text-slate-600">✗ No Cloud Storage/Vault</li>
+                  <li className="flex items-center gap-2 text-slate-600">✗ No Year-End T4 Slips</li>
+                </ul>
+              </div>
+              <Link to="/signup" className="inline-flex items-center justify-center border-1.5 border-white/10 hover:border-cyan-500 text-white hover:text-cyan-400 bg-transparent rounded-xl py-3.5 mt-8 font-semibold text-center text-sm transition-all hover:bg-cyan-500/5 cursor-pointer">
+                Get Started
+              </Link>
+            </div>
+
+            {/* Starter Plan - Highlighted */}
+            <div className="card-glass border-cyan-500/30 shadow-cyan-950/20 relative flex flex-col justify-between p-8 transform scale-105 z-20">
+              <div className="absolute -top-3.5 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-cyan-400 to-cyan-600 text-slate-950 font-black text-[10px] tracking-widest px-4 py-1 rounded-full uppercase shadow">
+                MOST POPULAR
+              </div>
+              <div className="space-y-6 pt-2">
+                <div>
+                  <span className="text-xs uppercase tracking-widest text-cyan-400 font-bold">Standard Tier</span>
+                  <h3 className="text-2xl font-bold text-white mt-1">Starter</h3>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl font-extrabold text-white">
+                    {billingCycle === 'yearly' ? '$16' : '$20'}
+                  </span>
+                  <span className="text-slate-500 text-sm">/month</span>
+                </div>
+                <p className="text-slate-400 text-sm">Best for growing small businesses needing dynamic cloud storage and T4 slips.</p>
+                <div className="border-t border-slate-800/80 my-4"></div>
+                <ul className="space-y-3 text-sm text-slate-300">
+                  <li className="flex items-center gap-2">✓ Up to 3 Companies</li>
+                  <li className="flex items-center gap-2">✓ Up to 15 Employees</li>
+                  <li className="flex items-center gap-2">✓ Secure Cloud Storage</li>
+                  <li className="flex items-center gap-2">✓ Auto-aggregate T4 Slips</li>
+                  <li className="flex items-center gap-2 text-slate-600">✗ No CRA XML File Transfers</li>
+                </ul>
+              </div>
+              <Link to="/signup" className="inline-flex items-center justify-center bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-bold rounded-xl py-3.5 mt-8 text-center text-sm transition-all shadow-lg hover:shadow-cyan-400/30 hover:scale-[1.02] cursor-pointer">
+                Start Starter Trial
+              </Link>
+            </div>
+
+            {/* Pro Plan */}
+            <div className="card-glass flex flex-col justify-between p-8">
+              <div className="space-y-6">
+                <div>
+                  <span className="text-xs uppercase tracking-widest text-purple-400 font-bold">Unlimited Tier</span>
+                  <h3 className="text-2xl font-bold text-white mt-1">Business Pro</h3>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl font-extrabold text-white">
+                    {billingCycle === 'yearly' ? '$40' : '$50'}
+                  </span>
+                  <span className="text-slate-500 text-sm">/month</span>
+                </div>
+                <p className="text-slate-400 text-sm">Perfect for accounting offices, remote bookkeeping, and multiple corporations.</p>
+                <div className="border-t border-slate-800/80 my-4"></div>
+                <ul className="space-y-3 text-sm text-slate-300">
+                  <li className="flex items-center gap-2">✓ Unlimited Companies</li>
+                  <li className="flex items-center gap-2">✓ Unlimited Employees</li>
+                  <li className="flex items-center gap-2">✓ Full XML CRA File Export</li>
+                  <li className="flex items-center gap-2">✓ Multi-Template Branding</li>
+                  <li className="flex items-center gap-2">✓ Priority Dedicated Support</li>
+                </ul>
+              </div>
+              <Link to="/signup" className="inline-flex items-center justify-center bg-gradient-to-r from-purple-400 to-indigo-500 text-white font-bold rounded-xl py-3.5 mt-8 text-center text-sm transition-all shadow-lg hover:shadow-purple-400/30 hover:scale-[1.02] cursor-pointer">
+                Go Pro Unlimited
+              </Link>
+            </div>
+
+          </div>
         </div>
       </section>
 
-      {/* ── Footer ── */}
-      <footer className="bg-gray-900 text-gray-400 py-12 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-brand-500 to-brand-600 rounded-xl flex items-center justify-center">
-                <span className="text-white font-black text-lg">S</span>
-              </div>
-              <div>
-                <div className="font-black text-white text-lg">StubDesk</div>
-                <div className="text-xs text-gray-500">Canadian Payroll Software</div>
-              </div>
-            </div>
-
-            <div className="flex gap-8 text-sm">
-              <a href="#features" className="hover:text-white transition-colors">Features</a>
-              <a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a>
-              <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
-              <Link to="/login" className="hover:text-white transition-colors">Sign In</Link>
-            </div>
+      {/* Accordion FAQ Section */}
+      <section id="faq" className="py-28 relative bg-slate-950/20 border-t border-slate-900">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="text-center space-y-4 mb-16">
+            <h2 className="text-4xl font-black text-white">
+              Got <span className="text-gradient-cyan">questions?</span> We've got answers.
+            </h2>
+            <p className="text-slate-400">Everything you need to know about the StubDesk platform.</p>
           </div>
 
-          <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-gray-600">© {new Date().getFullYear()} StubDesk. All rights reserved.</p>
-            <p className="text-sm text-gray-600">Made with ❤️ in Canada</p>
+          <div className="card-glass divide-y divide-slate-800/60 p-6 sm:p-10 text-left">
+            {faqs.map((faq, index) => (
+              <div key={index} className="faq-item">
+                <button 
+                  className="faq-trigger"
+                  onClick={() => setOpenFaq(openFaq === index ? null : index)}
+                >
+                  <span>{faq.q}</span>
+                  <span className={`faq-icon font-mono text-xl ${openFaq === index ? 'open' : ''}`}>
+                    {openFaq === index ? '−' : '+'}
+                  </span>
+                </button>
+                <div className={`faq-content ${openFaq === index ? 'open' : ''}`}>
+                  <p className="leading-relaxed">{faq.a}</p>
+                </div>
+              </div>
+            ))}
           </div>
+        </div>
+      </section>
+
+      {/* Futuristic CTA Section */}
+      <section className="py-28 text-center relative overflow-hidden">
+        <div className="max-w-4xl mx-auto px-6 space-y-8 relative z-10">
+          <h2 className="text-4xl sm:text-6xl font-black text-white leading-tight">
+            Ready to completely <br />
+            simplify your <span className="text-gradient-cyan">payroll?</span>
+          </h2>
+          <p className="text-lg text-slate-400 max-w-xl mx-auto leading-relaxed">
+            Join hundreds of Canadian business owners who save hours every month. Start generating precise payslips instantly.
+          </p>
+          <div className="pt-2">
+            <Link to="/signup" className="inline-flex items-center justify-center bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-black text-lg px-12 py-5 rounded-2xl transition-all shadow-lg hover:shadow-cyan-400/40 hover:scale-[1.02] cursor-pointer badge-glowing">
+              Start Your 14-Day Free Trial
+            </Link>
+          </div>
+          <p className="text-xs text-slate-500 font-medium">No credit card required · Instant access</p>
+        </div>
+      </section>
+
+      {/* Dark Luxury Footer */}
+      <footer className="py-16 bg-slate-950/80 border-t border-slate-900/60 text-slate-500 relative z-10">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center">
+              <span className="text-slate-950 font-black text-sm">S</span>
+            </div>
+            <span className="text-xl font-bold tracking-tight text-white">
+              Stub<span className="text-cyan-400">Desk</span>
+            </span>
+          </div>
+          
+          <div className="flex gap-8 text-sm font-semibold">
+            <a href="#" className="hover:text-cyan-400 transition-colors">Privacy Policy</a>
+            <a href="#" className="hover:text-cyan-400 transition-colors">Terms of Service</a>
+            <a href="#" className="hover:text-cyan-400 transition-colors">Contact Support</a>
+          </div>
+          
+          <p className="text-sm">
+            © {new Date().getFullYear()} StubDesk. Built with precision for Canadian businesses. 🇨🇦
+          </p>
         </div>
       </footer>
     </div>

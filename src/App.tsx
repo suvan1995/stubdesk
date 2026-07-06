@@ -1,49 +1,59 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useLimitsStore } from '@/store/limitsStore'
 import { useTaxStore } from '@/store/taxStore'
 import { setLiveTaxConstants } from '@/lib/payrollEngine'
-import { startActivityTracking, injectCSP } from '@/lib/security'
-
-// Pages — user app
-import LandingPage       from '@/pages/LandingPage'
-import LoginPage         from '@/pages/auth/LoginPage'
-import SignupPage        from '@/pages/auth/SignupPage'
-import MFAVerifyPage     from '@/pages/auth/mfa/MFAVerifyPage'
-import MFAEnrollPage     from '@/pages/auth/mfa/MFAEnrollPage'
-import DashboardPage     from '@/pages/dashboard/DashboardPage'
-import PayslipBuilder    from '@/pages/payslip/PayslipBuilder'
-import CompaniesPage     from '@/pages/companies/CompaniesPage'
-import EmployeesPage     from '@/pages/employees/EmployeesPage'
-import PayslipsPage      from '@/pages/payslips/PayslipsPage'
-import T4ListPage        from '@/pages/t4/T4ListPage'
-import T4EditPage        from '@/pages/t4/T4EditPage'
-import PayrollSummaryPage from '@/pages/payroll/PayrollSummaryPage'
-import RemittancePage    from '@/pages/remittance/RemittancePage'
-import ROEListPage       from '@/pages/roe/ROEListPage'
-import ROEEditPage       from '@/pages/roe/ROEEditPage'
-import YearEndPage       from '@/pages/yearend/YearEndPage'
-import T4AListPage       from '@/pages/yearend/T4AListPage'
-import T4AEditPage       from '@/pages/yearend/T4AEditPage'
-import T5ListPage        from '@/pages/yearend/T5ListPage'
-import T5EditPage        from '@/pages/yearend/T5EditPage'
-import SettingsPage      from '@/pages/settings/SettingsPage'
-import BillingPage       from '@/pages/billing/BillingPage'
-import NotFoundPage      from '@/pages/NotFoundPage'
-
-// Pages — admin
-import AdminLayout       from '@/pages/admin/AdminLayout'
-import AdminOverviewPage from '@/pages/admin/AdminOverviewPage'
-import AdminUsersPage    from '@/pages/admin/AdminUsersPage'
-import AdminPlansPage    from '@/pages/admin/AdminPlansPage'
-import AdminTaxPage      from '@/pages/admin/AdminTaxPage'
+import { startActivityTracking } from '@/lib/security'
 
 // Layout & guards
 import AppLayout         from '@/components/layout/AppLayout'
 import AuthGuard         from '@/components/auth/AuthGuard'
 import PlanGuard         from '@/components/auth/PlanGuard'
+
+// Route-split pages so PDF/admin/year-end code is loaded only when visited.
+const LandingPage        = lazy(() => import('@/pages/LandingPage'))
+const LoginPage          = lazy(() => import('@/pages/auth/LoginPage'))
+const SignupPage         = lazy(() => import('@/pages/auth/SignupPage'))
+const MFAVerifyPage      = lazy(() => import('@/pages/auth/mfa/MFAVerifyPage'))
+const MFAEnrollPage      = lazy(() => import('@/pages/auth/mfa/MFAEnrollPage'))
+const DashboardPage      = lazy(() => import('@/pages/dashboard/DashboardPage'))
+const PayslipBuilder     = lazy(() => import('@/pages/payslip/PayslipBuilder'))
+const CompaniesPage      = lazy(() => import('@/pages/companies/CompaniesPage'))
+const EmployeesPage      = lazy(() => import('@/pages/employees/EmployeesPage'))
+const PayslipsPage       = lazy(() => import('@/pages/payslips/PayslipsPage'))
+const T4ListPage         = lazy(() => import('@/pages/t4/T4ListPage'))
+const T4EditPage         = lazy(() => import('@/pages/t4/T4EditPage'))
+const PayrollSummaryPage = lazy(() => import('@/pages/payroll/PayrollSummaryPage'))
+const RemittancePage     = lazy(() => import('@/pages/remittance/RemittancePage'))
+const ROEListPage        = lazy(() => import('@/pages/roe/ROEListPage'))
+const ROEEditPage        = lazy(() => import('@/pages/roe/ROEEditPage'))
+const YearEndPage        = lazy(() => import('@/pages/yearend/YearEndPage'))
+const T4AListPage        = lazy(() => import('@/pages/yearend/T4AListPage'))
+const T4AEditPage        = lazy(() => import('@/pages/yearend/T4AEditPage'))
+const T5ListPage         = lazy(() => import('@/pages/yearend/T5ListPage'))
+const T5EditPage         = lazy(() => import('@/pages/yearend/T5EditPage'))
+const SettingsPage       = lazy(() => import('@/pages/settings/SettingsPage'))
+const BillingPage        = lazy(() => import('@/pages/billing/BillingPage'))
+const NotFoundPage       = lazy(() => import('@/pages/NotFoundPage'))
+
+const AdminLayout        = lazy(() => import('@/pages/admin/AdminLayout'))
+const AdminOverviewPage  = lazy(() => import('@/pages/admin/AdminOverviewPage'))
+const AdminUsersPage     = lazy(() => import('@/pages/admin/AdminUsersPage'))
+const AdminPlansPage     = lazy(() => import('@/pages/admin/AdminPlansPage'))
+const AdminTaxPage       = lazy(() => import('@/pages/admin/AdminTaxPage'))
+
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-10 h-10 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-gray-500">Loading StubDesk...</p>
+      </div>
+    </div>
+  )
+}
 
 export default function App() {
   const { setSession, fetchProfile, loading } = useAuthStore()
@@ -53,9 +63,8 @@ export default function App() {
   // Keep engine in sync whenever DB constants change
   useEffect(() => { setLiveTaxConstants(constants) }, [constants])
 
-  // Inject CSP and start session timeout tracking
+  // Start session timeout tracking
   useEffect(() => {
-    injectCSP()
     const cleanup = startActivityTracking(async () => {
       await useAuthStore.getState().signOut()
     })
@@ -108,18 +117,12 @@ export default function App() {
   }, [setSession, fetchProfile, fetchLimits, fetchUsage, fetchConstants])
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-gray-500">Loading StubDesk…</p>
-        </div>
-      </div>
-    )
+    return <LoadingScreen />
   }
 
   return (
-    <Routes>
+    <Suspense fallback={<LoadingScreen />}>
+      <Routes>
       {/* Public */}
       <Route path="/"           element={<LandingPage />} />
       <Route path="/login"      element={<LoginPage />} />
@@ -171,6 +174,7 @@ export default function App() {
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   )
 }

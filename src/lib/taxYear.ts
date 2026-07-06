@@ -1,0 +1,3 @@
+export const CURRENT_TAX_YEAR = 2026
+
+export const TAX_YEAR_OPTIONS = [CURRENT_TAX_YEAR, CURRENT_TAX_YEAR + 1]

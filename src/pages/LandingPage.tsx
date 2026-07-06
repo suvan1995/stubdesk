@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
+import { CURRENT_TAX_YEAR } from '@/lib/taxYear'
 
 export default function LandingPage() {
   const { user, loading } = useAuthStore()
@@ -96,7 +97,7 @@ export default function LandingPage() {
           <div className="lg:col-span-6 space-y-8 text-left">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-950/60 border border-cyan-800/40 text-cyan-400 text-xs font-bold">
               <span className="pulsing-indicator"></span>
-              2026 CRA COMPLIANT
+              {CURRENT_TAX_YEAR} CRA RATES
             </div>
             
             <h1 className="text-5xl sm:text-6xl md:text-7xl font-black text-white leading-tight tracking-tight">
@@ -374,7 +375,7 @@ export default function LandingPage() {
                 <ul className="space-y-3 text-sm text-slate-300">
                   <li className="flex items-center gap-2">✓ 1 Active Company</li>
                   <li className="flex items-center gap-2">✓ Up to 2 Employees</li>
-                  <li className="flex items-center gap-2">✓ Dynamic 2026 Tax Engine</li>
+                  <li className="flex items-center gap-2">✓ Dynamic {CURRENT_TAX_YEAR} Tax Engine</li>
                   <li className="flex items-center gap-2 text-slate-600">✗ No Cloud Storage/Vault</li>
                   <li className="flex items-center gap-2 text-slate-600">✗ No Year-End T4 Slips</li>
                 </ul>

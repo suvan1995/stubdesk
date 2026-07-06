@@ -2,6 +2,7 @@ import jsPDF from 'jspdf'
 import type { PayslipResult } from '@/types/payroll'
 import type { Company, Employee } from '@/types/database'
 import { fmtCAD } from './payrollEngine'
+import { CURRENT_TAX_YEAR } from './taxYear'
 
 // Template colour palettes — mirrors the HTML app
 const TEMPLATES: Record<number, {
@@ -332,7 +333,7 @@ export function generatePayslipPDF(opts: PayslipPDFOptions): Blob {
   doc.text('* This payslip is generated for informational purposes. Consult a payroll professional for complex situations.', margin, y, { maxWidth: fullW })
   y += 5
   sf('normal', 7.5, gray as number[])
-  tx(`Generated ${fmtToday()}  |  Province: ${company.province}  |  2026 CRA Rates`, margin, y)
+  tx(`Generated ${fmtToday()}  |  Province: ${company.province}  |  ${CURRENT_TAX_YEAR} CRA Rates`, margin, y)
 
   // ── PAGE 2: Employer Cost Summary ────────────────────────────
   addEmployerPage(doc, opts, opts.colorMode, T.primary)
@@ -739,7 +740,7 @@ function generateQuickBooksStyle(opts: PayslipPDFOptions): Blob {
   // ── Footer ────────────────────────────────────────────────────────────────
   rule(y, lgray); y += 4
   sf('italic', 6.5, mgray)
-  tx(`Generated ${fmtToday()}  |  Province: ${company.province}  |  2026 CRA Rates`, mg, y)
+  tx(`Generated ${fmtToday()}  |  Province: ${company.province}  |  ${CURRENT_TAX_YEAR} CRA Rates`, mg, y)
 
   // ── PAGE 2: Employer Cost Summary ─────────────────────────────────────────
   addEmployerPage(doc, opts, opts.colorMode, [43, 130, 84])
@@ -950,7 +951,7 @@ function generateDayforceStyle(opts: PayslipPDFOptions): Blob {
   y += 3
   doc.setDrawColor(...lgray); doc.setLineWidth(0.3); doc.line(mg, y, pageW - mg, y); y += 4
   sf('italic', 6.5, mgray)
-  tx(`Generated ${fmtToday()}  |  Province: ${company.province}  |  2026 CRA Rates`, mg, y)
+  tx(`Generated ${fmtToday()}  |  Province: ${company.province}  |  ${CURRENT_TAX_YEAR} CRA Rates`, mg, y)
 
   // ── PAGE 2: Employer Cost Summary ─────────────────────────────────────────
   addEmployerPage(doc, opts, opts.colorMode, [15, 40, 80])

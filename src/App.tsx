@@ -6,6 +6,7 @@ import { useLimitsStore } from '@/store/limitsStore'
 import { useTaxStore } from '@/store/taxStore'
 import { setLiveTaxConstants } from '@/lib/payrollEngine'
 import { startActivityTracking } from '@/lib/security'
+import { CURRENT_TAX_YEAR } from '@/lib/taxYear'
 
 // Layout & guards
 import AppLayout         from '@/components/layout/AppLayout'
@@ -83,7 +84,7 @@ export default function App() {
             const plan = useAuthStore.getState().profile?.plan ?? 'free'
             fetchLimits(plan)
             fetchUsage(session.user.id)
-            fetchConstants(2026)
+            fetchConstants(CURRENT_TAX_YEAR)
           })
           .catch((err) => {
             console.error('App init fetchProfile failed:', err)
@@ -106,7 +107,7 @@ export default function App() {
             const plan = useAuthStore.getState().profile?.plan ?? 'free'
             fetchLimits(plan)
             fetchUsage(session.user.id)
-            fetchConstants(2026)
+            fetchConstants(CURRENT_TAX_YEAR)
           })
           .catch((err) => {
             console.error('onAuthStateChange fetchProfile failed:', err)

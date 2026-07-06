@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import { TAX_CONSTANTS_2026 } from '@/lib/taxConstants'
+import { CURRENT_TAX_YEAR } from '@/lib/taxYear'
 import type { TaxConstants, TaxBracket } from '@/types/payroll'
 
 interface TaxStore {
@@ -85,11 +86,11 @@ function rowToConstants(row: DBTaxRow): TaxConstants {
 
 export const useTaxStore = create<TaxStore>((set) => ({
   constants:   TAX_CONSTANTS_2026,   // hardcoded fallback
-  taxYear:     2026,
+  taxYear:     CURRENT_TAX_YEAR,
   loading:     false,
   lastUpdated: null,
 
-  fetchConstants: async (year = 2026) => {
+  fetchConstants: async (year = CURRENT_TAX_YEAR) => {
     set({ loading: true })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase.from('tax_constants') as any)
@@ -99,7 +100,7 @@ export const useTaxStore = create<TaxStore>((set) => ({
 
     if (error || !data) {
       // DB not set up yet — use hardcoded fallback silently
-      set({ loading: false, taxYear: year })
+      set({ constants: TAX_CONSTANTS_2026, loading: false, taxYear: year, lastUpdated: null })
       return
     }
 
@@ -123,6 +124,7 @@ export const useTaxStore = create<TaxStore>((set) => ({
     if (data) {
       set({
         constants:   rowToConstants(data as DBTaxRow),
+        taxYear:     year,
         lastUpdated: (data as DBTaxRow).updated_at,
       })
     }

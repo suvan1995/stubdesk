@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useTaxStore, type DBTaxRow } from '@/store/taxStore'
 import { Card, CardTitle } from '@/components/ui/Card'
+import { CURRENT_TAX_YEAR, TAX_YEAR_OPTIONS } from '@/lib/taxYear'
 
-const CURRENT_YEAR = new Date().getFullYear()
-const YEARS = [CURRENT_YEAR, CURRENT_YEAR + 1]
+const YEARS = TAX_YEAR_OPTIONS
 
 interface BracketRow { min: number; max: number | null; rate: number }
 
 export default function AdminTaxPage() {
   const { constants, taxYear, lastUpdated, fetchConstants, updateConstants } = useTaxStore()
-  const [year,    setYear]    = useState(CURRENT_YEAR)
+  const [year,    setYear]    = useState(CURRENT_TAX_YEAR)
   const [saving,  setSaving]  = useState(false)
   const [saved,   setSaved]   = useState(false)
   const [error,   setError]   = useState<string | null>(null)
@@ -223,7 +223,7 @@ export default function AdminTaxPage() {
         <CardTitle>Federal Income Tax</CardTitle>
         <div className="grid grid-cols-2 gap-4 mb-4">
           <NumField label="Basic Personal Amount ($)" value={fedBPA} onChange={setFedBPA} />
-          <NumField label="Credit Rate (lowest bracket rate)" value={fedCreditRate} onChange={setFedCreditRate} pct hint="e.g. 0.14 = 14% for 2026" />
+          <NumField label="Credit Rate (lowest bracket rate)" value={fedCreditRate} onChange={setFedCreditRate} pct hint={`e.g. 0.14 = 14% for ${CURRENT_TAX_YEAR}`} />
         </div>
         <BracketEditor brackets={fedBrackets} onChange={setFedBrackets} label="Federal Tax Brackets" />
       </Card>

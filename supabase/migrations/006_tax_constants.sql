@@ -34,9 +34,9 @@ create table if not exists public.tax_constants (
   -- Ontario
   on_basic_personal     numeric(10,2) not null default 12989,
   on_credit_rate        numeric(8,6) not null default 0.0505,
-  on_surtax1_threshold  numeric(10,2) not null default 5554,
+  on_surtax1_threshold  numeric(10,2) not null default 5818,
   on_surtax1_rate       numeric(8,6) not null default 0.20,
-  on_surtax2_threshold  numeric(10,2) not null default 7108,
+  on_surtax2_threshold  numeric(10,2) not null default 7446,
   on_surtax2_rate       numeric(8,6) not null default 0.36,
   on_brackets           jsonb not null default '[
     {"min":0,"max":53891,"rate":0.0505},
@@ -50,24 +50,25 @@ create table if not exists public.tax_constants (
   ab_basic_personal     numeric(10,2) not null default 22769,
   ab_credit_rate        numeric(8,6) not null default 0.08,
   ab_brackets           jsonb not null default '[
-    {"min":0,"max":151234,"rate":0.10},
-    {"min":151234,"max":181475,"rate":0.12},
-    {"min":181475,"max":241975,"rate":0.13},
-    {"min":241975,"max":362962,"rate":0.14},
-    {"min":362962,"max":null,"rate":0.15}
+    {"min":0,"max":61200,"rate":0.08},
+    {"min":61200,"max":154259,"rate":0.10},
+    {"min":154259,"max":185111,"rate":0.12},
+    {"min":185111,"max":246813,"rate":0.13},
+    {"min":246813,"max":370220,"rate":0.14},
+    {"min":370220,"max":null,"rate":0.15}
   ]',
 
   -- British Columbia
-  bc_basic_personal     numeric(10,2) not null default 13217,
-  bc_credit_rate        numeric(8,6) not null default 0.0560,
+  bc_basic_personal     numeric(10,2) not null default 13216,
+  bc_credit_rate        numeric(8,6) not null default 0.0506,
   bc_brackets           jsonb not null default '[
-    {"min":0,"max":50363,"rate":0.0560},
+    {"min":0,"max":50363,"rate":0.0506},
     {"min":50363,"max":100728,"rate":0.0770},
     {"min":100728,"max":115648,"rate":0.1050},
-    {"min":115648,"max":140180,"rate":0.1229},
-    {"min":140180,"max":190252,"rate":0.1470},
-    {"min":190252,"max":265354,"rate":0.1680},
-    {"min":265354,"max":null,"rate":0.2050}
+    {"min":115648,"max":140430,"rate":0.1229},
+    {"min":140430,"max":190405,"rate":0.1470},
+    {"min":190405,"max":265545,"rate":0.1680},
+    {"min":265545,"max":null,"rate":0.2050}
   ]',
 
   updated_at            timestamptz not null default now(),

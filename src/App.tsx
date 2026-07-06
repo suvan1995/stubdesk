@@ -36,6 +36,9 @@ const T5ListPage         = lazy(() => import('@/pages/yearend/T5ListPage'))
 const T5EditPage         = lazy(() => import('@/pages/yearend/T5EditPage'))
 const SettingsPage       = lazy(() => import('@/pages/settings/SettingsPage'))
 const BillingPage        = lazy(() => import('@/pages/billing/BillingPage'))
+const PrivacyPolicyPage  = lazy(() => import('@/pages/PrivacyPolicyPage'))
+const TermsOfServicePage = lazy(() => import('@/pages/TermsOfServicePage'))
+const ContactSupportPage = lazy(() => import('@/pages/ContactSupportPage'))
 const NotFoundPage       = lazy(() => import('@/pages/NotFoundPage'))
 
 const AdminLayout        = lazy(() => import('@/pages/admin/AdminLayout'))
@@ -128,6 +131,9 @@ export default function App() {
       <Route path="/login"      element={<LoginPage />} />
       <Route path="/signup"     element={<SignupPage />} />
       <Route path="/mfa/verify" element={<MFAVerifyPage />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+      <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+      <Route path="/contact-support" element={<ContactSupportPage />} />
 
       {/* Protected — user app */}
       <Route element={<AuthGuard />}>

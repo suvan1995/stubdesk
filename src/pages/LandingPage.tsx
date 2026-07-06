@@ -510,9 +510,9 @@ export default function LandingPage() {
           </div>
           
           <div className="flex gap-8 text-sm font-semibold">
-            <a href="#" className="hover:text-cyan-400 transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-cyan-400 transition-colors">Terms of Service</a>
-            <a href="#" className="hover:text-cyan-400 transition-colors">Contact Support</a>
+            <Link to="/privacy-policy" className="hover:text-cyan-400 transition-colors">Privacy Policy</Link>
+            <Link to="/terms-of-service" className="hover:text-cyan-400 transition-colors">Terms of Service</Link>
+            <Link to="/contact-support" className="hover:text-cyan-400 transition-colors">Contact Support</Link>
           </div>
           
           <p className="text-sm">

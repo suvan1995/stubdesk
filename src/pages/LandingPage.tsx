@@ -158,10 +158,12 @@ export default function LandingPage() {
                     Hourly Wage
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-2 text-slate-500 text-sm">$</span>
+                    <span className="pointer-events-none absolute inset-y-0 left-0 flex w-10 items-center justify-center text-sm text-slate-500">
+                      $
+                    </span>
                     <input 
                       type="number"
-                      className="preview-input pl-7" 
+                      className="preview-input pl-10" 
                       value={hourlyRate}
                       onChange={(e) => setHourlyRate(Math.max(0, parseFloat(e.target.value) || 0))}
                     />

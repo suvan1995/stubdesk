@@ -1,1 +1,0 @@
-import{j as a,h as r}from"./index-DTSWk8z2.js";function n({children:t,className:s,padding:e=!0}){return a.jsx("div",{className:r("card",e&&"p-5",s),children:t})}function x({children:t,className:s}){return a.jsx("div",{className:r("text-xs font-bold uppercase tracking-widest text-gray-400 mb-3",s),children:t})}export{n as C,x as a};

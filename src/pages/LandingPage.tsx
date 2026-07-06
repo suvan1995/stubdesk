@@ -163,7 +163,7 @@ export default function LandingPage() {
                     </span>
                     <input 
                       type="number"
-                      className="preview-input pl-10" 
+                      className="preview-input preview-input-currency" 
                       value={hourlyRate}
                       onChange={(e) => setHourlyRate(Math.max(0, parseFloat(e.target.value) || 0))}
                     />

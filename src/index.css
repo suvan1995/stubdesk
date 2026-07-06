@@ -148,6 +148,10 @@
   outline: none;
 }
 
+.preview-input-currency {
+  padding-left: 2.75rem;
+}
+
 .preview-input:focus {
   border-color: rgba(6, 182, 212, 0.5);
   box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
